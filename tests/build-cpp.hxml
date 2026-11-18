@@ -1,0 +1,2 @@
+tests/build.hxml
+-cpp tests/bin/cpp

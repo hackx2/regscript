@@ -1,0 +1,3 @@
+{
+    "haxe.configurations": [["tests/build-hl.hxml"], ["tests/build-cpp.hxml"]]
+}
