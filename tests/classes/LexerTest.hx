@@ -10,7 +10,7 @@ function tokenize(src:String):Array<TokenType> {
 
 	final lexer = new Lexer(src);
 	while (true) {
-		final type = lexer.nextToken().type;
+		final type = lexer.next().type;
 		if (type == Eof) break;
 		tokens.push(type);
 	}
@@ -215,8 +215,8 @@ class LexerTest extends Test {
 	function testPositions() {
 		/// consume both the sure & nods, ignore "hewwo"
 		final l = new Lexer("sure\n  /* hewwo\n */ nods");
-		l.nextToken();// consume sure
-		final t = l.nextToken(); // consume nods
+		l.next();// consume sure
+		final t = l.next(); // consume nods
 
 		Assert.equals(3, t.line);
 		Assert.equals(5, t.col); // comments mustn't break col

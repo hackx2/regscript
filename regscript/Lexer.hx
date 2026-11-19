@@ -168,7 +168,7 @@ inline function isHexadecimal(c:Int) {
 // on the lexical analysis phase.
 
 // Also, each lexer instance only allocates a single token throughout it's whole lifespan.
-// Every time you call `nextToken`, the `token` instance variable gets updated and returned.
+// Every time you call `next`, the `token` instance variable gets updated and returned.
 @:nullSafety(Strict)
 class Lexer {
 	var input:String;
@@ -247,7 +247,11 @@ class Lexer {
 		}
 	}
 
-	public function nextToken():Token {
+	/**
+	 * Next token
+	 */
+	public function next():Token {
+		// todo windows /r/n vs linux's /n
 		// skips whitespace, tabs, newlines, \r, and comments
 		while (pos < length) {
 			final code = fastCodeAt(input, pos);
