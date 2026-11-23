@@ -15,12 +15,12 @@ enum abstract Op(Int) from Int to Int {
 	var LOAD_BOOL;		// Reg(A) = 1 (true) or 0 (false)
 	var LOAD_NULL;		// Reg(A) = null
 
-	var GET_GLOBAL;
-	var SET_GLOBAL;
+	var GET_GLOBAL;		// Reg(A) = Globals[Const(Big)]
+	var SET_GLOBAL;		// Globals[Const(Big)] = Reg(A)
 
-	var JUMP;
-	var JUMP_IF_FALSE;
-	var JUMP_IF_TRUE;
+	var JUMP;			// pc += (Reg(B) + Jump Offset)
+	var JUMP_IF_FALSE;	// if(!Reg(A)) pc += (Reg(B) + Jump Offset)
+	var JUMP_IF_TRUE;	// if(Reg(A)) pc += (Reg(B) + Jump Offset)
 
 	var ADD;        	// Reg(A) = RC(B) + RC(C)
 	var SUB;			// Reg(A) = RC(B) - RC(C) 
