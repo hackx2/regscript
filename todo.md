@@ -32,6 +32,10 @@
     - [x] Load bool
     - [x] Load null
     - [ ] Throw
+    - [ ] New array
+    - [ ] new obj (anon struct)
+    - [ ] set field
+    - [ ] get field
     - [x] Call
       - [x] Native
       - [x] Bytecode
