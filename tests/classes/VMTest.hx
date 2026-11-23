@@ -206,6 +206,47 @@ final class VMTest extends Test {
 			Instruction.makeInstruction(LOAD_BOOL, 1, 1), //load true
 			Instruction.makeInstruction(NOT, 0, 1)
 		]);
+
+		// eq
+		assertInstructions(true, [
+			Instruction.makeInstruction(EQ, 0, Instruction.constant(0), Instruction.constant(1))
+		], [10, 10]);
+
+		assertInstructions(true, [
+			Instruction.makeInstruction(EQ, 0, Instruction.constant(0), Instruction.constant(1))
+		], [10.0, 10.0]);
+
+		assertInstructions(true, [
+			Instruction.makeInstruction(LOAD_BOOL, 1, 1),
+			Instruction.makeInstruction(LOAD_BOOL, 2, 1),
+			Instruction.makeInstruction(EQ, 0, 1, 2)
+		]);
+
+		assertInstructions(false, [
+			Instruction.makeInstruction(LOAD_BOOL, 1, 1),
+			Instruction.makeInstruction(LOAD_BOOL, 2, 0),
+			Instruction.makeInstruction(EQ, 0, 1, 2)
+		]);
+
+		assertInstructions(true, [
+			Instruction.makeInstruction(LOAD_NULL, 1),
+			Instruction.makeInstruction(LOAD_NULL, 2),
+			Instruction.makeInstruction(EQ, 0, 1, 2)
+		]);
+
+		assertInstructions(false, [
+			Instruction.makeInstruction(LOAD_NULL, 1),
+			Instruction.makeInstruction(EQ, 0, 1, Instruction.constant(0))
+		], ["sure"]);
+
+		// neq
+		assertInstructions(true, [
+			Instruction.makeInstruction(NEQ, 0, Instruction.constant(0), Instruction.constant(1))
+		], [10, 20]);
+
+		assertInstructions(false, [
+			Instruction.makeInstruction(NEQ, 0, Instruction.constant(0), Instruction.constant(1))
+		], [10, 10]);
 	}
 
 	function testGlobals():Void {
@@ -229,7 +270,7 @@ final class VMTest extends Test {
 	}
 
 	function testMove() {
-		assertInstructions(1, [
+		assertInstructions(true, [
 			Instruction.makeInstruction(LOAD_BOOL, 4, 1),
 			Instruction.makeInstruction(MOVE, 0, 4)
 		]);

@@ -62,8 +62,8 @@
         - [X] USHR
       - [ ] Comparison op thingy
         - [X] NOT
-        - [ ] EQ
-        - [ ] NEQ
+        - [X] EQ
+        - [X] NEQ
         - [ ] LT
         - [ ] LTE
         - [ ] GT

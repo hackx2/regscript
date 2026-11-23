@@ -38,6 +38,8 @@ enum abstract Op(Int) from Int to Int {
 	var BNOT;			// Reg(A) = ~RC(B)
 
 	var NOT;			// Reg(A) = !RC(B)
+	var EQ;				// Reg(A) = RC(B) == RC(C)
+	var NEQ;			// Reg(A) = RC(B) != RC(C)
 }
 
 enum abstract ConditionalJumpOp(Int) to Op to Int { // i like strictly typing things :3
@@ -464,6 +466,39 @@ class VM {
 		};
 	}
 
+	inline function isEqual(slotL:Int, slotR:Int):Bool {
+		final kindL = this.kinds[slotL];
+		final kindR = this.kinds[slotR];
+
+		if (kindL == kindR) {
+			return switch kindL {
+				case KIND_NULL: true;
+				case KIND_BOOL, KIND_INT: this.ints[slotL] == this.ints[slotR];
+				case KIND_FLOAT: this.floats[slotL] == this.floats[slotR];
+				case KIND_OBJ: this.objs[slotL] == this.objs[slotR];
+			};
+		}
+
+		if ((kindL == KIND_INT || kindL == KIND_FLOAT) && (kindR == KIND_INT || kindR == KIND_FLOAT)) {
+			final l:Float = kindL == KIND_INT ? this.ints[slotL] : this.floats[slotL];
+			final r:Float = kindR == KIND_INT ? this.ints[slotR] : this.floats[slotR];
+			return l == r;
+		}
+
+		return false;
+	}
+
+	macro static function macroEq(negate:Bool = false) {
+		final expr = negate ? (macro !isEqual(slotL, slotR) ? 1 : 0) : (macro isEqual(slotL, slotR) ? 1 : 0);
+
+		return macro {
+			final slotL = slotOf(Instruction.argumentB(instruction));
+			final slotR = slotOf(Instruction.argumentC(instruction));
+			this.kinds[slotA] = KIND_BOOL;
+			this.ints[slotA] = $expr;
+		}
+	}
+
 	public function run(main:FunctionProto):Dynamic {
 		this.loadConstants(main);
 		this.callDepth = 0;
@@ -561,7 +596,9 @@ class VM {
 					}
 
 				// comparison ops
-				case NOT: // !
+				case EQ: macroEq();
+				case NEQ: macroEq(true);
+				case NOT:
 					final slotB = this.slotOf(Instruction.argumentB(instruction));
 					this.kinds[slotA] = KIND_INT;
 					this.ints[slotA] = !isTruthy(slotB) ? 1:0;
