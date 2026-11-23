@@ -28,6 +28,14 @@ enum abstract Op(Int) from Int to Int {
 	var MOD;			// Reg(A) = RC(B) % RC(C)
 	var DIV;			// Reg(A) = RC(B) / RC(C)
 	var NEG;   			// Reg(A) = -RC(B)
+
+	var BAND;			// Reg(A) = RC(B) & RC(C)
+	var BOR;			// Reg(A) = RC(B) | RC(C)
+	var BXOR;			// Reg(A) = RC(B) ^ RC(C)
+	var SHL;			// Reg(A) = RC(B) << RC(C)
+	var SHR;			// Reg(A) = RC(B) >> RC(C)
+	var USHR;			// Reg(A) = RC(B) >>> RC(C)
+	var BNOT;			// Reg(A) = ~RC(B)
 }
 
 enum abstract ConditionalJumpOp(Int) to Op to Int { // i like strictly typing things :3
@@ -402,7 +410,7 @@ class VM {
 	}
 
 	/** scary macro thingy i built-up, enabling me to easily write performant binary ops :3**/
-	macro static function macroBinNum(expr, name:ExprOf<String>, alwaysFloat:Bool = false, checkZero:Bool = false, ?fallbackExpr) {
+	macro static function macroBinNum(expr, name:ExprOf<String>, alwaysFloat:Bool = false, checkZero:Bool = false, intOnly:Bool = false, ?fallbackExpr) {
 		final guard = checkZero ? macro if (r == 0)
 			this.error("division by zero") : macro {};
 
@@ -426,6 +434,19 @@ class VM {
 
 		final fallback = fallbackExpr != null ? fallbackExpr : macro this.error("Cannot " + $name + " " + this.readSlot(slotL) + " and " + this.readSlot(slotR));
 
+		if (intOnly) {
+			return macro {
+				final slotL = this.slotOf(Instruction.argumentB(instruction));
+				final slotR = this.slotOf(Instruction.argumentC(instruction));
+
+				if (this.kinds[slotL] == KIND_INT && this.kinds[slotR] == KIND_INT) {
+					$intBranch;
+				} else {
+					$fallback;
+				}
+			};
+		}
+	
 		return macro {
 			final slotL = this.slotOf(Instruction.argumentB(instruction));
 			final slotR = this.slotOf(Instruction.argumentC(instruction));
@@ -518,6 +539,22 @@ class VM {
 						floats[slotA] = -floats[slotB];
 					} else {
 						this.error('cannot negate ${readSlot(slotB)}');
+					}
+
+				case BAND: macroBinNum(l & r, "bitwise and", false, false, true);
+				case BOR: macroBinNum(l | r, "bitwise or", false, false, true);
+				case BXOR: macroBinNum(l ^ r, "bitwise xor", false, false, true);
+				case SHL: macroBinNum(l << r, "bitshift left", false, false, true);
+				case SHR: macroBinNum(l >> r, "bitshift right", false, false, true);
+				case USHR: macroBinNum(l >>> r, "unsigned bitshift right", false, false, true);
+				case BNOT:
+					final slotB = this.slotOf(Instruction.argumentB(instruction));
+
+					if(kinds[slotB] == KIND_INT) {
+						this.kinds[slotA] = KIND_INT;
+						this.ints[slotA] = ~this.ints[slotB];
+					} else {
+						this.error('cannot bitwise not ${this.readSlot(slotB)}');
 					}
 
 				case CALL:

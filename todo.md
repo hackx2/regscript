@@ -52,14 +52,14 @@
         - [X] MOD
         - [X] DIV
         - [x] NEGATE 
-      - [ ] Bitwise Ops
-        - [ ] BAND
-        - [ ] BOR
-        - [ ] BXOR
-        - [ ] BNOT
-        - [ ] SHL
-        - [ ] SHR
-        - [ ] USHR
+      - [X] Bitwise Ops
+        - [x] BAND
+        - [X] BOR
+        - [x] BXOR
+        - [x] BNOT
+        - [x] SHL
+        - [X] SHR
+        - [X] USHR
       - [ ] Comparison op thingy
         - [ ] NOT
         - [ ] EQ

@@ -163,6 +163,43 @@ final class VMTest extends Test {
 		assertInstructions(22.3, [Instruction.makeInstruction(NEG, 0, Instruction.constant(0))], [-22.3]);
 	}
 
+	function testBitwise() {
+		// and
+		assertInstructions(0xA & 0xB, [
+			Instruction.makeInstruction(BAND, 0, Instruction.constant(0), Instruction.constant(1))
+		], [0xA, 0xB]);	
+
+		// or
+		assertInstructions(0xA | 0xB, [
+			Instruction.makeInstruction(BOR, 0, Instruction.constant(0), Instruction.constant(1))
+		], [0xA, 0xB]);	
+
+		// xor
+		assertInstructions(0xA ^ 0xB, [
+			Instruction.makeInstruction(BXOR, 0, Instruction.constant(0), Instruction.constant(1))
+		], [0xA, 0xB]);	
+
+		// shift left
+		assertInstructions(0xA << 0xB, [
+			Instruction.makeInstruction(SHL, 0, Instruction.constant(0), Instruction.constant(1))
+		], [0xA, 0xB]);	
+
+		// shift right
+		assertInstructions(0xA >> 0xB, [
+			Instruction.makeInstruction(SHR, 0, Instruction.constant(0), Instruction.constant(1))
+		], [0xA, 0xB]);	
+
+		// unsigned shift right
+		assertInstructions(0xA >> 0xB, [
+			Instruction.makeInstruction(USHR, 0, Instruction.constant(0), Instruction.constant(1))
+		], [0xA, 0xB]);	
+
+		// not
+		assertInstructions(~0xA, [
+			Instruction.makeInstruction(BNOT, 0, Instruction.constant(0))
+		], [0xA]);	
+	}
+
 	function testGlobals():Void {
 		assertInstructions(100, [
 			Instruction.makeInstructionBig(LOAD_CONST, 0, 1), // load const 1 (100) from register 0
