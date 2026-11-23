@@ -66,6 +66,11 @@ final class VMTest extends Test {
 		assertInstructions(1.8912, [
 			Instruction.makeInstruction(ADD, 0, Instruction.constant(0), Instruction.constant(1))
 		], [1, .8912]);
+
+		// string + string
+		assertInstructions("hi, meow!", [
+			Instruction.makeInstruction(ADD, 0, Instruction.constant(0), Instruction.constant(1))
+		], ["hi", ", meow!"]);
 	}
 
 	function testSub() {

@@ -1,6 +1,5 @@
 package regscript;
 
-
 import haxe.ds.Vector;
 import haxe.ds.StringMap;
 import haxe.macro.Expr.ExprOf;
@@ -264,10 +263,7 @@ class VM {
 	inline function writeSlot(slot:Int, val:Dynamic):Void {
 		switch Type.typeof(val) {
 			case TNull:
-				kinds[slot] = KIND_NULL;
-				ints[slot] = 0;
-				floats[slot] = 0.0;
-				objs[slot] = null;
+				__nullifySlot(slot);
 			case TInt:
 				kinds[slot] = KIND_INT;
 				ints[slot] = (val : Int);
@@ -397,6 +393,14 @@ class VM {
 		this.switchTo(this.savedFunction[frame], this.savedFirstRegister[frame], this.savedPc[frame]);
 	}
 
+	@:noCompletion
+	inline function __nullifySlot(slot:Int):Void {
+		kinds[slot] = KIND_NULL;
+		ints[slot] = 0;
+		floats[slot] = 0.0;
+		objs[slot] = null;
+	}
+
 	/** scary macro thingy i built-up, enabling me to easily write performant binary ops :3**/
 	macro static function macroBinNum(expr, name:ExprOf<String>, alwaysFloat:Bool = false, checkZero:Bool = false, ?fallbackExpr) {
 		final guard = checkZero ? macro if (r == 0)
@@ -460,11 +464,7 @@ class VM {
 					kinds[slotA] = KIND_BOOL;
 					ints[slotA] = Instruction.argumentB(instruction) != 0 ? 1 : 0;
 
-				case LOAD_NULL:
-					this.kinds[slotA] = KIND_NULL;
-					this.objs[slotA] = null;
-					this.ints[slotA] = 0;
-					this.floats[slotA] = 0.0;
+				case LOAD_NULL: __nullifySlot(slotA);
 
 				case JUMP:
 					this.pc += Instruction.argumentJump(instruction);
@@ -552,5 +552,18 @@ class VM {
 				case _: this.error('unknown opcode ~ $op');
 			}
 		}
+	}
+
+	/** Reset the vm (duh) **/
+	public function reset() { // todo: test me
+		for (i in 0...nextConstantSlot) __nullifySlot(i);
+		nextConstantSlot = 0;
+		
+		for (i in MAX_CONSTS...nextGlobalSlot) __nullifySlot(i);
+		globals.clear();
+		nextGlobalSlot = MAX_CONSTS;
+
+		callDepth = 0;
+		pc = 0;
 	}
 }
