@@ -7,6 +7,10 @@ import utest.Assert;
 import utest.Test;
 import regscript.VM;
 
+enum abstract ThrowAssertType(String) to String from String {
+	var DivideZero = "division by zero";
+}
+
 final class VMTest extends Test {
 	/**
 	 * By default, this function will return register `0`, so,
@@ -48,7 +52,8 @@ final class VMTest extends Test {
 
 	function testAdd() {
 		// int
-		assertInstructions(1221821 + 21902912, [ // don't mind these interesting numbers
+		assertInstructions(1221821 + 21902912, [
+			// don't mind these interesting numbers
 			Instruction.makeInstruction(ADD, 0, Instruction.constant(0), Instruction.constant(1))
 		], [1221821, 21902912]);
 
@@ -95,6 +100,52 @@ final class VMTest extends Test {
 		assertInstructions(16.5, [
 			Instruction.makeInstruction(MUL, 0, Instruction.constant(0), Instruction.constant(1))
 		], [3, 5.5]);
+	}
+
+	function testMod() {
+		// int
+		assertInstructions(1, [
+			Instruction.makeInstruction(MOD, 0, Instruction.constant(0), Instruction.constant(1))
+		], [10, 3]);
+
+		// float
+		assertInstructions(1.5, [
+			Instruction.makeInstruction(MOD, 0, Instruction.constant(0), Instruction.constant(1))
+		], [10.5, 3.0]);
+
+		// float + int
+		assertInstructions(1, [
+			Instruction.makeInstruction(MOD, 0, Instruction.constant(0), Instruction.constant(1))
+		], [10, 3.0]);
+
+		assertInstructions(-1, [
+			Instruction.makeInstruction(MOD, 0, Instruction.constant(0), Instruction.constant(1))
+		], [-7, -3]);
+
+		assertError(ThrowAssertType.DivideZero, [
+			Instruction.makeInstruction(MOD, 0, Instruction.constant(0), Instruction.constant(1))
+		], [3, 0]);
+	}
+
+	function testDiv() {
+		// int
+		assertInstructions(5, [
+			Instruction.makeInstruction(DIV, 0, Instruction.constant(0), Instruction.constant(1))
+		], [10, 2]);
+
+		// float + int
+		assertInstructions(2.75, [
+			Instruction.makeInstruction(DIV, 0, Instruction.constant(0), Instruction.constant(1))
+		], [5.5, 2]);
+
+		// float
+		assertInstructions(3, [
+			Instruction.makeInstruction(DIV, 0, Instruction.constant(0), Instruction.constant(1))
+		], [7.5, 2.5]);
+
+		assertError(ThrowAssertType.DivideZero, [
+			Instruction.makeInstruction(DIV, 0, Instruction.constant(0), Instruction.constant(1))
+		], [10, 0]);
 	}
 
 	function testNegate():Void {

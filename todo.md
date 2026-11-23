@@ -45,12 +45,12 @@
       - [x] Jump if false
       - [x] Jump if true
     - [ ] Math
-      - [ ] Basic Ops
+      - [x] Basic Ops
         - [x] ADD
         - [X] SUB
         - [X] MUL
-        - [ ] MOD
-        - [ ] DIV
+        - [X] MOD
+        - [X] DIV
         - [x] NEGATE 
       - [ ] Bitwise Ops
         - [ ] BAND

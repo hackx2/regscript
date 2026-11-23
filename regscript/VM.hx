@@ -399,46 +399,28 @@ class VM {
 
 	/** scary macro thingy i built-up, enabling me to easily write performant binary ops :3**/
 	macro static function macroBinNum(expr, name:ExprOf<String>, alwaysFloat:Bool = false, checkZero:Bool = false, ?fallbackExpr) {
-		final writeRes = if(checkZero) macro {
-			if(r == 0) {
-				this.kinds[slotA] = KIND_NULL;
-				this.objs[slotA] = null;
-			} else {
-				this.kinds[slotA] = KIND_FLOAT;
-				this.floats[slotA] = $expr;
-			}
-		} else macro {
-			this.kinds[slotA] = KIND_FLOAT;
-			this.floats[slotA] = $expr;
-		}
+		final guard = checkZero ? macro if (r == 0)
+			this.error("division by zero") : macro {};
 
-		final intAndFloatWrite = macro {
+		final floatBranch = macro {
 			final l:Float = kindL == KIND_INT ? this.ints[slotL] : this.floats[slotL];
 			final r:Float = kindR == KIND_INT ? this.ints[slotR] : this.floats[slotR];
-
-			$writeRes;
-		}
-		
-		final slotWrite = if (alwaysFloat) {
-			intAndFloatWrite;
-		} else {
-			macro {
-				if (kindL == KIND_INT && kindR == KIND_INT) {
-					final l = this.ints[slotL];
-					final r = this.ints[slotR];
-					this.kinds[slotA] = KIND_INT;
-					this.ints[slotA] = $expr;
-				} else {
-					$intAndFloatWrite;
-				}
-			};
-		}
-
-		final fallback = fallbackExpr != null ? {
-			fallbackExpr;
-		} : {
-			macro this.error("Cannot " + $name + " " + this.readSlot(slotL) + " and " + this.readSlot(slotR));
+			$guard;
+			this.kinds[slotA] = KIND_FLOAT;
+			this.floats[slotA] = $expr;
 		};
+
+		final intBranch = macro {
+			final l = this.ints[slotL];
+			final r = this.ints[slotR];
+			$guard;
+			this.kinds[slotA] = KIND_INT;
+			this.ints[slotA] = $expr;
+		};
+
+		final slotWrite = alwaysFloat ? floatBranch : macro if (kindL == KIND_INT && kindR == KIND_INT) $intBranch else $floatBranch;
+
+		final fallback = fallbackExpr != null ? fallbackExpr : macro this.error("Cannot " + $name + " " + this.readSlot(slotL) + " and " + this.readSlot(slotR));
 
 		return macro {
 			final slotL = this.slotOf(Instruction.argumentB(instruction));
