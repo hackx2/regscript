@@ -11,6 +11,7 @@
 - [ ] Parser
 - [ ] Type Checker (strictType toggle)
 - [ ] Compiler
+  - [ ] `for`, `while`, `break`, `continue`
 - [ ] Deadcode Elimination / Optimizer stage
 - [ ] Register VM
   - [ ] Steal unsafe reflect from somewhere
@@ -21,7 +22,6 @@
     - [ ] Anon Structs
   - [ ] Imports
     - [ ] Wildcard Imports
-  - [ ] `for`, `while`, `break`, `continue`
   - [ ] Enum
   - [ ] Enum Abstract
   - [ ] Scripted classes
@@ -36,7 +36,7 @@
       - [x] Native
       - [x] Bytecode
     - [x] Return
-      - [ ] Out of a function
+      - [x] Out of a function
     - [x] Globals
       - [x] Get global
       - [x] Set gobal
@@ -44,7 +44,7 @@
       - [x] Jump
       - [x] Jump if false
       - [x] Jump if true
-    - [ ] Math
+    - [x] Math
       - [x] Basic Ops
         - [x] ADD
         - [X] SUB
@@ -60,14 +60,14 @@
         - [x] SHL
         - [X] SHR
         - [X] USHR
-      - [ ] Comparison op thingy
+      - [x] Comparison op thingy
         - [X] NOT
         - [X] EQ
         - [X] NEQ
-        - [ ] LT
-        - [ ] LTE
-        - [ ] GT
-        - [ ] GTE
+        - [x] LT
+        - [x] LTE
+        - [x] GT
+        - [x] GTE
 ### Additional
 - [ ] Config Class
 - [ ] Unsafe Reflect

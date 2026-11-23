@@ -40,6 +40,10 @@ enum abstract Op(Int) from Int to Int {
 	var NOT;			// Reg(A) = !RC(B)
 	var EQ;				// Reg(A) = RC(B) == RC(C)
 	var NEQ;			// Reg(A) = RC(B) != RC(C)
+	var LT;				// Reg(A) = RC(B) < RC(C)
+	var LTE;			// Reg(A) = RC(B) <= RC(C)
+	var GT;				// Reg(A) = RC(B) > RC(C)
+	var GTE;			// Reg(A) = RC(B) >= RC(C)
 }
 
 enum abstract ConditionalJumpOp(Int) to Op to Int { // i like strictly typing things :3
@@ -375,7 +379,7 @@ class VM {
 	}
 
 	/** Switches the current frame **/
-	function switchTo(func:FunctionProto, firstRegister:Int, pc:Int):Void {
+	function switchFrame(func:FunctionProto, firstRegister:Int, pc:Int):Void {
 		this.current = func;
 		this.instructions = func.instructions;
 		this.constantsStart = func.constantsStart;
@@ -402,7 +406,7 @@ class VM {
 			this.kinds[dest] = KIND_NULL; // heh
 			this.objs[dest] = null;
 		}
-		this.switchTo(this.savedFunction[frame], this.savedFirstRegister[frame], this.savedPc[frame]);
+		this.switchFrame(this.savedFunction[frame], this.savedFirstRegister[frame], this.savedPc[frame]);
 	}
 
 	@:noCompletion
@@ -411,59 +415,6 @@ class VM {
 		ints[slot] = 0;
 		floats[slot] = 0.0;
 		objs[slot] = null;
-	}
-
-	/** scary macro thingy i built-up, enabling me to easily write performant binary ops :3**/
-	macro static function macroBinNum(expr, name:ExprOf<String>, alwaysFloat:Bool = false, checkZero:Bool = false, intOnly:Bool = false, ?fallbackExpr) {
-		final guard = checkZero ? macro if (r == 0)
-			this.error("division by zero") : macro {};
-
-		final floatBranch = macro {
-			final l:Float = kindL == KIND_INT ? this.ints[slotL] : this.floats[slotL];
-			final r:Float = kindR == KIND_INT ? this.ints[slotR] : this.floats[slotR];
-			$guard;
-			this.kinds[slotA] = KIND_FLOAT;
-			this.floats[slotA] = $expr;
-		};
-
-		final intBranch = macro {
-			final l = this.ints[slotL];
-			final r = this.ints[slotR];
-			$guard;
-			this.kinds[slotA] = KIND_INT;
-			this.ints[slotA] = $expr;
-		};
-
-		final slotWrite = alwaysFloat ? floatBranch : macro if (kindL == KIND_INT && kindR == KIND_INT) $intBranch else $floatBranch;
-
-		final fallback = fallbackExpr != null ? fallbackExpr : macro this.error("Cannot " + $name + " " + this.readSlot(slotL) + " and " + this.readSlot(slotR));
-
-		if (intOnly) {
-			return macro {
-				final slotL = this.slotOf(Instruction.argumentB(instruction));
-				final slotR = this.slotOf(Instruction.argumentC(instruction));
-
-				if (this.kinds[slotL] == KIND_INT && this.kinds[slotR] == KIND_INT) {
-					$intBranch;
-				} else {
-					$fallback;
-				}
-			};
-		}
-	
-		return macro {
-			final slotL = this.slotOf(Instruction.argumentB(instruction));
-			final slotR = this.slotOf(Instruction.argumentC(instruction));
-
-			final kindL = this.kinds[slotL];
-			final kindR = this.kinds[slotR];
-
-			if ((kindL == KIND_INT || kindL == KIND_FLOAT) && (kindR == KIND_INT || kindR == KIND_FLOAT)) {
-				$slotWrite;
-			} else {
-				$fallback;
-			}
-		};
 	}
 
 	inline function isEqual(slotL:Int, slotR:Int):Bool {
@@ -479,30 +430,127 @@ class VM {
 			};
 		}
 
-		if ((kindL == KIND_INT || kindL == KIND_FLOAT) && (kindR == KIND_INT || kindR == KIND_FLOAT)) {
-			final l:Float = kindL == KIND_INT ? this.ints[slotL] : this.floats[slotL];
-			final r:Float = kindR == KIND_INT ? this.ints[slotR] : this.floats[slotR];
-			return l == r;
-		}
-
-		return false;
+		return bothNumbers(slotL, slotR) && numFromSlot(slotL) == numFromSlot(slotR);
 	}
 
-	macro static function macroEq(negate:Bool = false) {
-		final expr = negate ? (macro !isEqual(slotL, slotR) ? 1 : 0) : (macro isEqual(slotL, slotR) ? 1 : 0);
+	inline function isNumber(slot:Int):Bool {
+		final k = this.kinds[slot];
+		return k == KIND_INT || k == KIND_FLOAT;
+	}
 
-		return macro {
-			final slotL = slotOf(Instruction.argumentB(instruction));
-			final slotR = slotOf(Instruction.argumentC(instruction));
-			this.kinds[slotA] = KIND_BOOL;
-			this.ints[slotA] = $expr;
+	inline function bothNumbers(l:Int, r:Int):Bool
+		return isNumber(l) && isNumber(r);
+
+	inline function bothInts(l:Int, r:Int):Bool
+		return this.kinds[l] == KIND_INT && this.kinds[r] == KIND_INT;
+
+	/** gets a number from the given num slot, returning it as a float **/
+	inline function numFromSlot(slot:Int):Float
+		return this.kinds[slot] == KIND_INT ? this.ints[slot] : this.floats[slot];
+
+	inline function setInt(slot:Int, v:Int):Void {
+		this.kinds[slot] = KIND_INT;
+		this.ints[slot] = v;
+	}
+
+	inline function setFloat(slot:Int, v:Float):Void {
+		this.kinds[slot] = KIND_FLOAT;
+		this.floats[slot] = v;
+	}
+
+	inline function setBool(slot:Int, v:Bool):Void {
+		this.kinds[slot] = KIND_BOOL;
+		this.ints[slot] = v ? 1 : 0;
+	}
+
+	/** Resolves slot of arg b**/
+	inline function slotOfB(instruction:Int):Int return slotOf(Instruction.argumentB(instruction));
+	/** Resolves slot of arg c **/
+	inline function slotOfC(instruction:Int):Int return slotOf(Instruction.argumentC(instruction));
+
+	/** for `div` and `mod`. if given arg is 0, throw :3**/
+	inline function nonZero<T>(v:T):T { // generics :D
+		if ((cast v : Float) == 0) this.error("division by zero");
+		return v;
+	}
+	
+	function binaryFallback(op:Op, slotA:Int, slotL:Int, slotR:Int):Void {
+		final l = this.readSlot(slotL), r = this.readSlot(slotR);
+
+		switch op {
+			case ADD:
+				this.writeSlot(slotA, Std.string(l) + Std.string(r));
+				return;
+			case _:
+		}
+
+		this.error('Cannot perform arithmetic on $l and $r');
+	}
+
+	// scary macro funcs below :3
+	// not 100% on how macro functions work, but i think we can still use this class inside of a macro... 
+	// not too sure on why you'd even want to do such a thing... lol
+
+	macro static function arith(expr) return macro {
+		final slotL = slotOfB(instruction);
+		final slotR = slotOfC(instruction);
+
+		if (bothInts(slotL, slotR)) {
+			final l = ints[slotL];
+			final r = ints[slotR];
+			setInt(slotA, $expr);
+		} else if (bothNumbers(slotL, slotR)) {
+			final l = numFromSlot(slotL);
+			final r = numFromSlot(slotR);
+			setFloat(slotA, $expr);
+		} else {
+			binaryFallback(op, slotA, slotL, slotR);
+		}
+	}
+
+	macro static function floatArith(expr) return macro {
+		final slotL = slotOfB(instruction);
+		final slotR = slotOfC(instruction);
+
+		if (bothNumbers(slotL, slotR)) {
+			final l = numFromSlot(slotL);
+			final r = numFromSlot(slotR);
+			setFloat(slotA, $expr);
+		} else {
+			binaryFallback(op, slotA, slotL, slotR);
+		}
+	}
+
+	macro static function intArith(expr) return macro {
+		final slotL = slotOfB(instruction);
+		final slotR = slotOfC(instruction);
+
+		if (bothInts(slotL, slotR)) {
+			final l = ints[slotL];
+			final r = ints[slotR];
+			setInt(slotA, $expr);
+		} else {
+			binaryFallback(op, slotA, slotL, slotR);
+		}
+	}
+
+	macro static function relationalOp(expr) return macro {
+		final slotL = slotOfB(instruction);
+		final slotR = slotOfC(instruction);
+
+		if (bothNumbers(slotL, slotR)) {
+			final l = numFromSlot(slotL);
+			final r = numFromSlot(slotR);
+			setBool(slotA, $expr);
+		} else {
+			binaryFallback(op, slotA, slotL, slotR);
 		}
 	}
 
 	public function run(main:FunctionProto):Dynamic {
 		this.loadConstants(main);
 		this.callDepth = 0;
-		this.switchTo(main, REGISTERS_START +1, 0);
+		this.switchFrame(main, REGISTERS_START +1, 0);
 
 		while (true) {
 			final instruction = this.instructions[pc++];
@@ -518,27 +566,14 @@ class VM {
 					final argBig = Instruction.argumentBig(instruction);
 					this.copySlot(slotA, this.constantsStart + argBig);
 
-				case LOAD_BOOL:
-					kinds[slotA] = KIND_BOOL;
-					ints[slotA] = Instruction.argumentB(instruction) != 0 ? 1 : 0;
-
+				case LOAD_BOOL: setBool(slotA, Instruction.argumentB(instruction) != 0);
 				case LOAD_NULL: __nullifySlot(slotA);
 
-				case JUMP:
-					this.pc += Instruction.argumentJump(instruction);
-
-				case JUMP_IF_FALSE:
-					if (!isTruthy(slotA)) {
-						this.pc += Instruction.argumentJump(instruction);
-					}
-
-				case JUMP_IF_TRUE:
-					if(isTruthy(slotA)) {
-						this.pc += Instruction.argumentJump(instruction);
-					}
+				case JUMP: this.pc += Instruction.argumentJump(instruction);
+				case JUMP_IF_FALSE: if (!isTruthy(slotA)) this.pc += Instruction.argumentJump(instruction);
+				case JUMP_IF_TRUE: if(isTruthy(slotA)) this.pc += Instruction.argumentJump(instruction);
 
 				// global stuff
-
 				case GET_GLOBAL:
 					final big = Instruction.argumentBig(instruction);
 					final name = objs[constantsStart+big];
@@ -550,58 +585,39 @@ class VM {
 					this.copySlot(this.__findOrCreateGlobal(name), slotA);
 
 				// arithmetic operations (USING MACROS :DDDDDDD)
-				case ADD: macroBinNum(l + r, "add", false, false, {
-					final lVal = this.readSlot(slotL);
-					final rVal = this.readSlot(slotR);
-
-					if(lVal is String || rVal is String) {
-						this.writeSlot(slotA, Std.string(lVal) + Std.string(rVal));
-					} else {
-						this.error('Cannot add $lVal to $rVal');
-					}
-				});
-				case SUB: macroBinNum(l - r, "subtract");
-				case MUL: macroBinNum(l * r, "multiply");
-				case MOD: macroBinNum(l % r, "modulo", false, true);
-				case DIV: macroBinNum(l / r, "divide", true, true);
+				case ADD: arith(l + r);
+				case SUB: arith(l - r);
+				case MUL: arith(l * r);
+				case MOD: arith(l % nonZero(r));
+				case DIV: floatArith(l / nonZero(r));
 				case NEG: // -val
-					final slotB = this.slotOf(Instruction.argumentB(instruction));
-					final kind:ValueKind = this.kinds[slotB];
-
-					if(kind == KIND_INT) {
-						kinds[slotA] = KIND_INT;
-						ints[slotA] = -ints[slotB];
-					} else if (kind == KIND_FLOAT) {
-						kinds[slotA] = KIND_FLOAT;
-						floats[slotA] = -floats[slotB];
-					} else {
-						this.error('cannot negate ${readSlot(slotB)}');
+					final slotB = slotOfB(instruction);
+					switch kinds[slotB] {
+						case KIND_INT: setInt(slotA, -ints[slotB]);
+						case KIND_FLOAT: setFloat(slotA, -floats[slotB]);
+						case _: this.error('Cannot negate ${readSlot(slotB)}');
 					}
 				
 				// bitwise ops
-				case BAND: macroBinNum(l & r, "bitwise and", false, false, true);
-				case BOR: macroBinNum(l | r, "bitwise or", false, false, true);
-				case BXOR: macroBinNum(l ^ r, "bitwise xor", false, false, true);
-				case SHL: macroBinNum(l << r, "bitshift left", false, false, true);
-				case SHR: macroBinNum(l >> r, "bitshift right", false, false, true);
-				case USHR: macroBinNum(l >>> r, "unsigned bitshift right", false, false, true);
+				case BAND: intArith(l & r);
+				case BOR: intArith(l | r);
+				case BXOR: intArith(l ^ r);
+				case SHL: intArith(l << r);
+				case SHR: intArith(l >> r);
+				case USHR: intArith(l >>> r);
 				case BNOT:
-					final slotB = this.slotOf(Instruction.argumentB(instruction));
-
-					if(kinds[slotB] == KIND_INT) {
-						this.kinds[slotA] = KIND_INT;
-						this.ints[slotA] = ~this.ints[slotB];
-					} else {
-						this.error('cannot bitwise not ${this.readSlot(slotB)}');
-					}
+					final slotB = slotOfB(instruction);
+					if (kinds[slotB] == KIND_INT) setInt(slotA, ~ints[slotB]);
+					else this.error('Cannot bitwise not ${readSlot(slotB)}');
 
 				// comparison ops
-				case EQ: macroEq();
-				case NEQ: macroEq(true);
-				case NOT:
-					final slotB = this.slotOf(Instruction.argumentB(instruction));
-					this.kinds[slotA] = KIND_INT;
-					this.ints[slotA] = !isTruthy(slotB) ? 1:0;
+				case EQ:  setBool(slotA, isEqual(slotOfB(instruction), slotOfC(instruction)));
+				case NEQ: setBool(slotA, !isEqual(slotOfB(instruction), slotOfC(instruction)));
+				case NOT: setBool(slotA, !isTruthy(slotOfB(instruction)));
+				case LT:  relationalOp(l < r);
+				case LTE: relationalOp(l <= r);
+				case GT:  relationalOp(l > r);
+				case GTE: relationalOp(l >= r);
 
 				case CALL:
 					final argB = Instruction.argumentB(instruction);
@@ -619,19 +635,20 @@ class VM {
 						}
 
 						this.pushFrame(slotA);
-						this.switchTo(proto, calleeFirstArg, 0);
+						this.switchFrame(proto, calleeFirstArg, 0);
 					} else if (Reflect.isFunction(callee)) {
 						final native:NativeFunction = callee;
 						final args:Array<Dynamic> = [for (i in 1...argB + 1) this.readSlot(slotA + i)];
 						this.writeSlot(slotA, native(args));
 					} else {
-						this.error('cannot call ${this.readSlot(slotA)}');
+						this.error('Cannot call ${this.readSlot(slotA)}');
 					}
 				
 				case RETURN:
 					final hasVal = Instruction.argumentB(instruction) != 0;
 					if(this.callDepth == 0) return hasVal ? this.readSlot(slotA) : null;
 					this.popFrame(hasVal, slotA);
+
 				case _: this.error('unknown opcode ~ $op');
 			}
 		}

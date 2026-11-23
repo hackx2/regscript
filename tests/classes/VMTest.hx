@@ -247,6 +247,24 @@ final class VMTest extends Test {
 		assertInstructions(false, [
 			Instruction.makeInstruction(NEQ, 0, Instruction.constant(0), Instruction.constant(1))
 		], [10, 10]);
+
+		// less than
+		assertInstructions(true, [
+			Instruction.makeInstruction(LT, 0, Instruction.constant(0), Instruction.constant(1))
+		], [10, 20]);
+
+		assertInstructions(true, [ // less than equals
+			Instruction.makeInstruction(LTE, 0, Instruction.constant(0), Instruction.constant(1))
+		], [20, 20]);
+
+		// greater than
+		assertInstructions(true, [
+			Instruction.makeInstruction(GT, 0, Instruction.constant(0), Instruction.constant(1))
+		], [20, 10]);
+
+		assertInstructions(true, [ // greater than equals
+			Instruction.makeInstruction(GTE, 0, Instruction.constant(0), Instruction.constant(1))
+		], [20, 20]);
 	}
 
 	function testGlobals():Void {
