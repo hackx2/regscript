@@ -461,8 +461,10 @@ class VM {
 					ints[slotA] = Instruction.argumentB(instruction) != 0 ? 1 : 0;
 
 				case LOAD_NULL:
-					kinds[slotA] = KIND_NULL;
-					objs[slotA] = null;
+					this.kinds[slotA] = KIND_NULL;
+					this.objs[slotA] = null;
+					this.ints[slotA] = 0;
+					this.floats[slotA] = 0.0;
 
 				case JUMP:
 					this.pc += Instruction.argumentJump(instruction);
