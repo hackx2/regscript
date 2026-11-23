@@ -32,9 +32,9 @@
     - [x] Load bool
     - [x] Load null
     - [ ] Throw
-    - [ ] Call
-      - [ ] Native
-      - [ ] Bytecode
+    - [x] Call
+      - [x] Native
+      - [x] Bytecode
     - [x] Return
       - [ ] Out of a function
     - [x] Globals
