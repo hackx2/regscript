@@ -61,7 +61,7 @@
         - [X] SHR
         - [X] USHR
       - [ ] Comparison op thingy
-        - [ ] NOT
+        - [X] NOT
         - [ ] EQ
         - [ ] NEQ
         - [ ] LT

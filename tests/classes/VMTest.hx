@@ -16,10 +16,10 @@ final class VMTest extends Test {
 	 * By default, this function will return register `0`, so,
 	 * make sure whatever result you want to compare is on register `0`. 
 	 */
-	@:ignore function assertInstructions(expected:Dynamic, instructions:Array<Op>, constants:Array<Dynamic>, ?globals:StringMap<Dynamic>, ?pos:PosInfos):Void {
+	@:ignore function assertInstructions(expected:Dynamic, instructions:Array<Op>, ?constants:Array<Dynamic>, ?globals:StringMap<Dynamic>, ?pos:PosInfos):Void {
 		instructions = instructions.concat([Instruction.makeInstruction(RETURN, 0, 1)]);
 
-		final fn = new FunctionProto(Vector.fromArrayCopy(instructions), constants, 0, 1, "hiii [waves]", [], []);
+		final fn = new FunctionProto(Vector.fromArrayCopy(instructions), constants??[], 0, 1, "hiii [waves]", [], []);
 
 		final result:Dynamic = new VM(globals).run(fn);
 
@@ -200,6 +200,14 @@ final class VMTest extends Test {
 		], [0xA]);	
 	}
 
+	function testComparison() {
+		// not
+		assertInstructions(0, [
+			Instruction.makeInstruction(LOAD_BOOL, 1, 1), //load true
+			Instruction.makeInstruction(NOT, 0, 1)
+		]);
+	}
+
 	function testGlobals():Void {
 		assertInstructions(100, [
 			Instruction.makeInstructionBig(LOAD_CONST, 0, 1), // load const 1 (100) from register 0
@@ -224,7 +232,7 @@ final class VMTest extends Test {
 		assertInstructions(1, [
 			Instruction.makeInstruction(LOAD_BOOL, 4, 1),
 			Instruction.makeInstruction(MOVE, 0, 4)
-		], []);
+		]);
 	}
 
 	function testJumps() {

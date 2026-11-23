@@ -36,6 +36,8 @@ enum abstract Op(Int) from Int to Int {
 	var SHR;			// Reg(A) = RC(B) >> RC(C)
 	var USHR;			// Reg(A) = RC(B) >>> RC(C)
 	var BNOT;			// Reg(A) = ~RC(B)
+
+	var NOT;			// Reg(A) = !RC(B)
 }
 
 enum abstract ConditionalJumpOp(Int) to Op to Int { // i like strictly typing things :3
@@ -540,7 +542,8 @@ class VM {
 					} else {
 						this.error('cannot negate ${readSlot(slotB)}');
 					}
-
+				
+				// bitwise ops
 				case BAND: macroBinNum(l & r, "bitwise and", false, false, true);
 				case BOR: macroBinNum(l | r, "bitwise or", false, false, true);
 				case BXOR: macroBinNum(l ^ r, "bitwise xor", false, false, true);
@@ -556,6 +559,12 @@ class VM {
 					} else {
 						this.error('cannot bitwise not ${this.readSlot(slotB)}');
 					}
+
+				// comparison ops
+				case NOT: // !
+					final slotB = this.slotOf(Instruction.argumentB(instruction));
+					this.kinds[slotA] = KIND_INT;
+					this.ints[slotA] = !isTruthy(slotB) ? 1:0;
 
 				case CALL:
 					final argB = Instruction.argumentB(instruction);
