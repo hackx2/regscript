@@ -13,8 +13,64 @@
 - [ ] Compiler
 - [ ] Deadcode Elimination / Optimizer stage
 - [ ] Register VM
+  - [ ] Steal unsafe reflect from somewhere
+  - [ ] Upvalues
+  - [ ] Closures
+  - [x] FunctionProto
+  - [ ] Field access
+    - [ ] Anon Structs
+  - [ ] Imports
+    - [ ] Wildcard Imports
+  - [ ] `for`, `while`, `break`, `continue`
+  - [ ] Enum
+  - [ ] Enum Abstract
+  - [ ] Scripted classes
+  - [ ] Custom classes
+  - [ ] Instructions
+    - [x] Move
+    - [x] Load const
+    - [x] Load bool
+    - [x] Load null
+    - [ ] Throw
+    - [ ] Call
+      - [ ] Native
+      - [ ] Bytecode
+    - [x] Return
+      - [ ] Out of a function
+    - [x] Globals
+      - [x] Get global
+      - [x] Set gobal
+    - [x] Jump
+      - [x] Jump
+      - [x] Jump if false
+      - [x] Jump if true
+    - [ ] Math
+      - [ ] Basic Ops
+        - [x] ADD
+        - [X] SUB
+        - [X] MUL
+        - [ ] MOD
+        - [ ] DIV
+        - [x] NEGATE 
+      - [ ] Bitwise Ops
+        - [ ] BAND
+        - [ ] BOR
+        - [ ] BXOR
+        - [ ] BNOT
+        - [ ] SHL
+        - [ ] SHR
+        - [ ] USHR
+      - [ ] Comparison op thingy
+        - [ ] NOT
+        - [ ] EQ
+        - [ ] NEQ
+        - [ ] LT
+        - [ ] LTE
+        - [ ] GT
+        - [ ] GTE
 ### Additional
 - [ ] Config Class
+- [ ] Unsafe Reflect
 - [x] Custom Errors
   - [ ] Predefined Error Types
 - [ ] Config (copy hscript-improved)
@@ -22,3 +78,4 @@
 - [ ] gh action platform building thingy
 ### Scary
 - [ ] Macros?
+- [ ] Code running CLI

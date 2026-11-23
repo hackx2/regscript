@@ -9,6 +9,7 @@ class Test {
 		final r = new Runner();
 		r.addCase(new LexerTest());
 		r.addCase(new PreprocessorTest());
+		r.addCase(new VMTest());
 		Report.create(r);
 		r.run();
 	}
