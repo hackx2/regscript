@@ -14,6 +14,8 @@ enum abstract Op(Int) from Int to Int {
 	var LOAD_CONST;     // Reg(A) = Const(Big)
 	var LOAD_BOOL;		// Reg(A) = 1 (true) or 0 (false)
 	var LOAD_NULL;		// Reg(A) = null
+	
+	var NEW_OBJECT;		// Reg(A) = {}
 
 	var GET_GLOBAL;		// Reg(A) = Globals[Const(Big)]
 	var SET_GLOBAL;		// Globals[Const(Big)] = Reg(A)
@@ -568,6 +570,8 @@ class VM {
 
 				case LOAD_BOOL: setBool(slotA, Instruction.argumentB(instruction) != 0);
 				case LOAD_NULL: __nullifySlot(slotA);
+
+				case NEW_OBJECT: this.writeSlot(slotA, {});
 
 				case JUMP: this.pc += Instruction.argumentJump(instruction);
 				case JUMP_IF_FALSE: if (!isTruthy(slotA)) this.pc += Instruction.argumentJump(instruction);

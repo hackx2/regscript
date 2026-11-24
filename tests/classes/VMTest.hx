@@ -17,11 +17,7 @@ final class VMTest extends Test {
 	 * make sure whatever result you want to compare is on register `0`. 
 	 */
 	@:ignore function assertInstructions(expected:Dynamic, instructions:Array<Op>, ?constants:Array<Dynamic>, ?globals:StringMap<Dynamic>, ?pos:PosInfos):Void {
-		instructions = instructions.concat([Instruction.makeInstruction(RETURN, 0, 1)]);
-
-		final fn = new FunctionProto(Vector.fromArrayCopy(instructions), constants??[], 0, 1, "hiii [waves]", [], []);
-
-		final result:Dynamic = new VM(globals).run(fn);
+		final result:Dynamic = runInstructions(instructions, constants, globals);
 
 		// to check if our add op is correctly returning an int (if int + int), or a float (if float + float or float + int)
 		switch Type.typeof(expected) {
@@ -30,6 +26,12 @@ final class VMTest extends Test {
 			case _:
 				Assert.equals(expected, result, null, pos);
 		}
+	}
+
+	@:ignore function runInstructions(instructions:Array<Op>, constants:Array<Dynamic>, ?globals:StringMap<Dynamic>):Dynamic {
+		instructions = instructions.concat([Instruction.makeInstruction(RETURN, 0, 1)]);
+		final fn = new FunctionProto(Vector.fromArrayCopy(instructions), constants ?? [], 0, 1, "hiii [waves]", [], []);
+		return new VM(globals).run(fn);
 	}
 
 	@:ignore function assertError(expectedMsgPart:String, instructions:Array<Op>, constants:Array<Dynamic>, ?globals:StringMap<Dynamic>, ?pos:PosInfos):Void {
@@ -351,5 +353,11 @@ final class VMTest extends Test {
 			Instruction.makeInstructionBig(LOAD_CONST, 1, 1),
 			Instruction.makeInstruction(CALL, 0, 1)
 		], [proto, 3]);
+	}
+
+	function testNewObj() {
+		final obj:Dynamic = runInstructions([Instruction.makeInstruction(NEW_OBJECT, 0)], []);
+		Assert.notNull(obj);
+		Assert.equals(0, Reflect.fields(obj).length);
 	}
 }
