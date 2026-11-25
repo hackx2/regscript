@@ -10,8 +10,21 @@ import regscript.VM;
 enum abstract ThrowAssertType(String) to String from String {
 	var DivideZero = "division by zero";
 }
-
+// check the todo 
 final class VMTest extends Test {
+	@:ignore function proto(
+		instructions:Array<Op>, constants:Array<Dynamic>, 
+		arity:Int, regs:Int, name:String, ?upvals:Array<UpvalueDesc>
+	) {
+		return new FunctionProto(Vector.fromArrayCopy(instructions), constants, arity, regs, name, [], [], upvals);
+	}
+
+	@:ignore function runInstructions(instructions:Array<Op>, constants:Array<Dynamic>, ?globals:StringMap<Dynamic>):Dynamic {
+		instructions = instructions.concat([Instruction.makeInstruction(RETURN, 0, 1)]);
+		final fn = proto(instructions, constants ?? [], 0, 1, "hiii [waves]", []);
+		return new VM(globals).run(fn);
+	}
+
 	/**
 	 * By default, this function will return register `0`, so,
 	 * make sure whatever result you want to compare is on register `0`. 
@@ -26,12 +39,6 @@ final class VMTest extends Test {
 			case _:
 				Assert.equals(expected, result, null, pos);
 		}
-	}
-
-	@:ignore function runInstructions(instructions:Array<Op>, constants:Array<Dynamic>, ?globals:StringMap<Dynamic>):Dynamic {
-		instructions = instructions.concat([Instruction.makeInstruction(RETURN, 0, 1)]);
-		final fn = new FunctionProto(Vector.fromArrayCopy(instructions), constants ?? [], 0, 1, "hiii [waves]", [], []);
-		return new VM(globals).run(fn);
 	}
 
 	@:ignore function assertError(expectedMsgPart:String, instructions:Array<Op>, constants:Array<Dynamic>, ?globals:StringMap<Dynamic>, ?pos:PosInfos):Void {
@@ -51,6 +58,8 @@ final class VMTest extends Test {
 		final contains:Bool = Std.string(caught).indexOf(expectedMsgPart) != -1;
 		Assert.isTrue(contains, 'expected given error to contain "$expectedMsgPart", got "$caught"', pos);
 	}
+
+	/////////////////////
 
 	function testAdd() {
 		// int
@@ -192,7 +201,7 @@ final class VMTest extends Test {
 		], [0xA, 0xB]);	
 
 		// unsigned shift right
-		assertInstructions(0xA >> 0xB, [
+		assertInstructions(0xA >>> 0xB, [
 			Instruction.makeInstruction(USHR, 0, Instruction.constant(0), Instruction.constant(1))
 		], [0xA, 0xB]);	
 
@@ -321,6 +330,18 @@ final class VMTest extends Test {
 		], [2, -1]);
 	}
 
+	function testLoop() {
+		assertInstructions(25, [
+			Instruction.makeInstructionBig(LOAD_CONST, 0, 0),
+			Instruction.makeInstructionBig(LOAD_CONST, 1, 1),
+			Instruction.makeInstruction(EQ, 2, 1, Instruction.constant(0)),
+			Instruction.makeConditionalJump(JUMP_IF_TRUE, 2, 3),
+			Instruction.makeInstruction(ADD, 0, 0, Instruction.constant(1)),
+			Instruction.makeInstruction(SUB, 1, 1, Instruction.constant(2)),
+			Instruction.makeJump(-5)
+		], [0, 5, 1]);
+	}
+
 	function testCall() {
 		assertInstructions(null, [
 			Instruction.makeInstructionBig(LOAD_CONST, 0, 0),
@@ -359,5 +380,233 @@ final class VMTest extends Test {
 		final obj:Dynamic = runInstructions([Instruction.makeInstruction(NEW_OBJECT, 0)], []);
 		Assert.notNull(obj);
 		Assert.equals(0, Reflect.fields(obj).length);
+	}
+
+	function testClosureNoUpvals() {
+		final protogen = proto([
+			Instruction.makeInstructionBig(LOAD_CONST, 0,0),
+			Instruction.makeInstruction(RETURN, 0,1)
+		], [22], 0, 1, "protogen h-heh");
+
+		assertInstructions(22, [
+			Instruction.makeInstructionBig(NEW_CLOSURE, 0,0),
+			Instruction.makeInstruction(CALL, 0,0)
+		], [protogen]);
+	}
+
+	function testGETUpvalueOpen() {
+		final up = proto([
+			Instruction.makeInstruction(GET_UPVALUE, 0,0),
+			Instruction.makeInstruction(RETURN, 0, 1)
+		], [], 0, 1, "up :3", [new UpvalueDesc(true, 0)]);
+
+		assertInstructions(621, [
+			Instruction.makeInstructionBig(LOAD_CONST, 0,1), // reg0 = 621
+			Instruction.makeInstructionBig(NEW_CLOSURE, 1, 0), // capture reg0
+			Instruction.makeInstruction(CALL, 1, 0), // call reg1, return res in reg 0
+			Instruction.makeInstruction(MOVE, 0,1),
+			Instruction.makeInstruction(LOAD_NULL, 1)
+		], [up, 621]);
+	}
+
+	function testSETUpvalueOpen() {
+		final up = proto([
+			Instruction.makeInstructionBig(LOAD_CONST, 0,0),
+			Instruction.makeInstruction(SET_UPVALUE, 0,0),
+			Instruction.makeInstruction(RETURN, 0, 0)
+		], [621], 0, 1, "up :3", [new UpvalueDesc(true, 0)]);
+
+		assertInstructions(621, [
+			Instruction.makeInstruction(LOAD_NULL, 0),
+			Instruction.makeInstructionBig(NEW_CLOSURE, 1, 0),
+			Instruction.makeInstruction(CALL, 1, 0)
+		], [up]);
+	}
+
+	function testUpvalueLifetime() {
+		final index = proto([
+			Instruction.makeInstruction(GET_UPVALUE, 0, 0),
+			Instruction.makeInstruction(ADD, 0, 0, Instruction.constant(0)),
+			Instruction.makeInstruction(SET_UPVALUE, 0, 0),
+			Instruction.makeInstruction(RETURN, 0, 1)
+		], [1], 0, 1, "index", [new UpvalueDesc(true, 0)]);
+
+		final makeIndexTrackThing = proto([
+			Instruction.makeInstructionBig(LOAD_CONST, 0, 0), // index = 0
+			Instruction.makeInstructionBig(NEW_CLOSURE, 1, 1),
+			Instruction.makeInstruction(RETURN, 1, 1)
+		], [0, index], 0, 2, "makeIndexTrackThing");
+
+		assertInstructions(3, [
+			Instruction.makeInstructionBig(LOAD_CONST, 0, 0),
+			Instruction.makeInstruction(CALL, 0, 0), // reg0 is index closure
+			// MOVE as CALL overwrites its own reg
+			Instruction.makeInstruction(MOVE, 1, 0), Instruction.makeInstruction(CALL, 1, 0), // 1
+			Instruction.makeInstruction(MOVE, 1, 0), Instruction.makeInstruction(CALL, 1, 0), // 2
+			Instruction.makeInstruction(MOVE, 1, 0), Instruction.makeInstruction(CALL, 1, 0), // 3
+			Instruction.makeInstruction(MOVE, 0, 1)
+		], [makeIndexTrackThing]);
+	}
+
+	function testSharedUpvalue() {
+		final increment = proto([
+			Instruction.makeInstruction(GET_UPVALUE, 0, 0),
+			Instruction.makeInstruction(ADD, 0, 0,Instruction.constant(0)),
+			Instruction.makeInstruction(SET_UPVALUE, 0, 0),
+			Instruction.makeInstruction(RETURN, 0, 0)
+		], [1], 0, 1, "increment", [new UpvalueDesc(true, 0)]);
+
+		final get = proto([
+			Instruction.makeInstruction(GET_UPVALUE, 0, 0),
+			Instruction.makeInstruction(RETURN, 0, 1)
+		], [], 0, 1, "get", [new UpvalueDesc(true, 0)]);
+
+		assertInstructions(2, [
+			Instruction.makeInstructionBig(LOAD_CONST, 0, 2),
+			Instruction.makeInstructionBig(NEW_CLOSURE,1,0), // increment
+			Instruction.makeInstructionBig(NEW_CLOSURE,2,1), // get
+			Instruction.makeInstruction(MOVE, 3, 1), Instruction.makeInstruction(CALL, 3, 0), // increment
+			Instruction.makeInstruction(MOVE, 3, 1), Instruction.makeInstruction(CALL, 3, 0), // increment
+			Instruction.makeInstruction(MOVE, 3, 2), Instruction.makeInstruction(CALL, 3, 0), // get
+			Instruction.makeInstruction(MOVE, 0, 3)
+		], [increment, get, 0]);
+	}
+	
+	function testNestedUpvalue() {
+		/**
+		function main() {
+			var i = 5;
+			
+			function func1(){
+				function func2(){
+					return i;	
+				}
+				return func2();
+			}
+
+			return func1(); // should return 5
+		}
+		**/
+		final func2 = proto([
+			Instruction.makeInstruction(GET_UPVALUE, 0, 0),
+			Instruction.makeInstruction(RETURN, 0, 1)
+		], [], 0, 1, "func2", [new UpvalueDesc(false, 0)]);
+
+		final func1 = proto([
+			Instruction.makeInstructionBig(NEW_CLOSURE, 0, 0),
+			Instruction.makeInstruction(CALL, 0, 0),
+			Instruction.makeInstruction(RETURN, 0, 1)
+		], [func2], 0, 1, "func1", [new UpvalueDesc(true, 0)]);
+
+		assertInstructions(5, [
+			Instruction.makeInstructionBig(LOAD_CONST, 0, 1), // reg0 = 5
+			Instruction.makeInstructionBig(NEW_CLOSURE, 1, 0),
+			Instruction.makeInstruction(CALL, 1, 0),
+			Instruction.makeInstruction(MOVE, 0, 1)
+		], [func1, 5]);
+	}
+
+	function testCloseUpvalues() {
+		final get = proto([
+			Instruction.makeInstruction(GET_UPVALUE, 0,0),
+			Instruction.makeInstruction(RETURN, 0,1)
+		], [], 0,1,"g", [new UpvalueDesc(true, 0)]);
+
+		// closed
+		assertInstructions(1, [
+			Instruction.makeInstructionBig(LOAD_CONST, 0,1),//1
+			Instruction.makeInstructionBig(NEW_CLOSURE, 1,0),
+			Instruction.makeInstruction(CLOSE_UPVALUES, 0),
+			Instruction.makeInstructionBig(LOAD_CONST, 0,2),//2
+			Instruction.makeInstruction(CALL,1,0),
+			Instruction.makeInstruction(MOVE, 0,1)
+		], [get,1,2]);
+
+		// not closed.. closure can see updated reg val
+		assertInstructions(2, [
+			Instruction.makeInstructionBig(LOAD_CONST, 0,1),//1
+			Instruction.makeInstructionBig(NEW_CLOSURE, 1,0),
+			Instruction.makeInstructionBig(LOAD_CONST, 0,2),//2
+			Instruction.makeInstruction(CALL,1,0),
+			Instruction.makeInstruction(MOVE, 0,1)
+		], [get,1,2]);
+
+		// close reg1+... reg0 is unaffected
+		// meaning: our get closure can still see the updated val
+		assertInstructions(2, [
+			Instruction.makeInstructionBig(LOAD_CONST, 0,1),//1
+			Instruction.makeInstructionBig(NEW_CLOSURE, 1,0),
+			Instruction.makeInstruction(CLOSE_UPVALUES, 1),
+			Instruction.makeInstructionBig(LOAD_CONST, 0,2),//2
+			Instruction.makeInstruction(CALL,1,0),
+			Instruction.makeInstruction(MOVE, 0,1)
+		], [get,1,2]);
+	}
+
+	function testReturnNoVal() {
+		final doesNothing = proto([
+			Instruction.makeInstruction(RETURN,0,0)
+		], [], 0,1, "hi");
+
+		assertInstructions(null, [
+			Instruction.makeInstructionBig(LOAD_CONST, 0,0),
+			Instruction.makeInstruction(CALL,0,0)
+		], [doesNothing]);
+	}
+
+	function testRecursion() {
+		// sum(n) = n == 0 ? 0 : n + sum(n - 1)
+		final sum = proto([
+			Instruction.makeInstruction(EQ, 1, 0, Instruction.constant(1)),
+			Instruction.makeConditionalJump(JUMP_IF_FALSE, 1, 1),
+			Instruction.makeInstruction(RETURN, 0, 1),
+			Instruction.makeInstructionBig(GET_GLOBAL, 2, 0),
+			Instruction.makeInstruction(SUB, 3, 0, Instruction.constant(2)),
+			Instruction.makeInstruction(CALL, 2, 1),
+			Instruction.makeInstruction(ADD, 0, 0, 2),
+			Instruction.makeInstruction(RETURN, 0, 1)
+		], ["sum", 0, 1], 1, 4, "sumFunc");
+
+		function _sum(n:Int):Int {
+			return n == 0 ? 0 : n + _sum(n-1);
+		}
+	
+		assertInstructions(_sum(621), [
+			Instruction.makeInstructionBig(LOAD_CONST, 0, 0),
+			Instruction.makeInstructionBig(SET_GLOBAL, 0, 1),
+			Instruction.makeInstructionBig(LOAD_CONST, 1, 2),
+			Instruction.makeInstruction(CALL, 0, 1)
+		], [sum, "sum", 621]);
+	}
+
+	function testErrorStackOverflow() {
+		final f = proto([
+			Instruction.makeInstructionBig(GET_GLOBAL, 0, 0),
+			Instruction.makeInstruction(CALL, 0, 0),
+			Instruction.makeInstruction(RETURN, 0, 0)
+		], ["f"], 0, 1, "f");
+
+		assertError("stack overflow", [
+			Instruction.makeInstructionBig(LOAD_CONST, 0, 0),
+			Instruction.makeInstructionBig(SET_GLOBAL, 0, 1),
+			Instruction.makeInstruction(CALL, 0, 0)
+		], [f, "f"]);
+	}
+
+	function testErrorCall() {
+		final func = proto([
+			Instruction.makeInstruction(RETURN, 0,0)
+		], [], 1, 1, "func");
+
+		assertError("func expects 1 arg(s), got 0", [
+			Instruction.makeInstructionBig(NEW_CLOSURE, 0,0),
+			Instruction.makeInstruction(CALL, 0,0)
+		], [func]);
+
+		// call a non func
+		assertError("Cannot call 621", [
+			Instruction.makeInstructionBig(LOAD_CONST, 0,0),
+			Instruction.makeInstruction(CALL,0,0)
+		], [621]);
 	}
 }

@@ -15,8 +15,8 @@
 - [ ] Deadcode Elimination / Optimizer stage
 - [ ] Register VM
   - [ ] Steal unsafe reflect from somewhere
-  - [ ] Upvalues
-  - [ ] Closures
+  - [X] Upvalues
+  - [X] Closures
   - [x] FunctionProto
   - [ ] Field access
     - [ ] Anon Structs
@@ -33,7 +33,7 @@
     - [x] Load null
     - [ ] Throw
     - [ ] New array
-    - [ ] new obj (anon struct)
+    - [X] new obj (anon struct)
     - [ ] set field
     - [ ] get field
     - [x] Call
