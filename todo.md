@@ -18,6 +18,16 @@
   - [X] Upvalues
   - [X] Closures
   - [x] FunctionProto
+  - [ ] Interop
+    - [ ] method calls w/ `this` using `CALL_METHOD`
+    - [ ] property access using reflect
+    - [x] vm.call
+    - [x] vm.set
+    - [x] vm.exists
+    - [x] vm.get
+    - [ ] compiled cls access (base cls e.g. Math, Std, StringTools)
+    - [x] wrap haxe funcs in Reflect.makeVarArgs
+  - [ ] error callstack (have a look at [concept](./todo%20error.txt))
   - [ ] Field access
     - [ ] Anon Structs
   - [ ] Imports
@@ -31,6 +41,7 @@
     - [x] Load const
     - [x] Load bool
     - [x] Load null
+    - [ ] CALL_METHOD
     - [ ] Throw
     - [ ] New array
     - [X] new obj (anon struct)

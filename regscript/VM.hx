@@ -2,285 +2,21 @@ package regscript;
 
 import haxe.ds.Vector;
 import haxe.ds.StringMap;
-import haxe.macro.Expr.ExprOf;
 
-// Reg = Register (duh)
-// RC = Register or Constant
-enum abstract Op(Int) from Int to Int {
-	var MOVE = 0x00;    // Reg(A) = Reg(B)
-	var CALL;			// Reg(A) = Reg(A)(Reg(A+1)...Reg(A+B))
-	var RETURN;			// return B != 0 ? Reg(A) : null
-
-	var LOAD_CONST;     // Reg(A) = Const(Big)
-	var LOAD_BOOL;		// Reg(A) = 1 (true) or 0 (false)
-	var LOAD_NULL;		// Reg(A) = null
-	
-	var NEW_OBJECT;		// Reg(A) = {}
-
-	var NEW_CLOSURE; 	// Reg(A) = new Closure(Const(Big) as FunctionProto)
-	var CLOSE_UPVALUES;	// close ever upvalue on Reg(A) or above 
-
-	var GET_UPVALUE;	// Reg(A) = Upvalue(B)
-	var SET_UPVALUE;	// Upvalue(B) = Reg(A)
-	var GET_GLOBAL;		// Reg(A) = Globals[Const(Big)]
-	var SET_GLOBAL;		// Globals[Const(Big)] = Reg(A)
-
-	var JUMP;			// pc += (Reg(B) + Jump Offset)
-	var JUMP_IF_FALSE;	// if(!Reg(A)) pc += (Reg(B) + Jump Offset)
-	var JUMP_IF_TRUE;	// if(Reg(A)) pc += (Reg(B) + Jump Offset)
-
-	var ADD;        	// Reg(A) = RC(B) + RC(C)
-	var SUB;			// Reg(A) = RC(B) - RC(C) 
-	var MUL;			// Reg(A) = RC(B) * RC(C)
-	var MOD;			// Reg(A) = RC(B) % RC(C)
-	var DIV;			// Reg(A) = RC(B) / RC(C)
-	var NEG;   			// Reg(A) = -RC(B)
-
-	var BAND;			// Reg(A) = RC(B) & RC(C)
-	var BOR;			// Reg(A) = RC(B) | RC(C)
-	var BXOR;			// Reg(A) = RC(B) ^ RC(C)
-	var SHL;			// Reg(A) = RC(B) << RC(C)
-	var SHR;			// Reg(A) = RC(B) >> RC(C)
-	var USHR;			// Reg(A) = RC(B) >>> RC(C)
-	var BNOT;			// Reg(A) = ~RC(B)
-
-	var NOT;			// Reg(A) = !RC(B)
-	var EQ;				// Reg(A) = RC(B) == RC(C)
-	var NEQ;			// Reg(A) = RC(B) != RC(C)
-	var LT;				// Reg(A) = RC(B) < RC(C)
-	var LTE;			// Reg(A) = RC(B) <= RC(C)
-	var GT;				// Reg(A) = RC(B) > RC(C)
-	var GTE;			// Reg(A) = RC(B) >= RC(C)
-}
-
-abstract UpvalueDesc(Int) {
-	public inline function new(fromParent:Bool, parentSlot:Int) {
-		this = (parentSlot <<1) | (fromParent ? 1 : 0);
-	}
-
-	/** 
-	 * if true, capture a local register 
-	 * if false, reuse an enclosing funcs upvals
-	 */
-	public var fromParent(get,never):Bool;
-	inline function get_fromParent() {
-		return (this & 1) != 0;
-	}
-
-	/** The parent slot the upvalue is tracking **/
-	public var parentSlot(get,never):Int;
-	inline function get_parentSlot() {
-		return this >>> 1;
-	}
-}
-
-@:publicFields
-final class Upvalue {
-	var slot:Int; // slot pos
-
-	var kind:ValueKind = KIND_NULL;
-	var int:Int=0;
-	var float:Float = 0.0;
-	var obj:Dynamic = null;
-
-	inline function new(slot:Int) {
-		this.slot = slot;
-	}
-
-	inline function close() {
-		slot = -1;
-	}
-
-	/**question mark**/
-	inline function open():Bool {
-		return slot >= 0;
-	}
-}
-
-@:publicFields
-final class Closure {
-	var proto:FunctionProto;
-	var upvalues:Array<Upvalue>; // turn into a vector?
-
-	function new(proto:FunctionProto, upvalues:Array<Upvalue>) {
-		this.proto = proto;
-		this.upvalues = upvalues;
-	}
-}
-
-enum abstract ConditionalJumpOp(Int) to Op to Int { // i like strictly typing things :3
-	var JUMP_IF_FALSE = Op.JUMP_IF_FALSE;
-	var JUMP_IF_TRUE = Op.JUMP_IF_TRUE;
-}
-
-@:publicFields
-final class Instruction {
-	// -- encoding :3
-	
-	// let's us support both positive and negative numbers (when jumping)
-	// JUMP_OFFSET is the new 0 (automatically deducted by the VM at runtime).
-	// compiler is gonna basically auto add the offset; for example,
-	// we're given the number 5 by the ast, compiler adds `JUMP_OFFSET` to that
-	// amount, so it can be packed into a jump instruction
-	inline static var JUMP_OFFSET = (1<<17)-1;
-
-	/**
-	 * both `b` and `c` are unsigned 9-bit values (0...511)
-	 * 
-	 * @param op    Op code (6 bits; 0..63)
-	 * @param a     usually a register index (8 bits; 0..255)
-	 * @param b     0..255 = register slot | 256..511 = constant
-	 * @param c     0..255 = register slot | 256..511 = constant
-	 */
-	@:pure inline static function makeInstruction(op:Op, a:Int = 0, b:Int = 0, c:Int = 0):Int {
-		return ((
-			(op & 0x3F /* 63 */)
-			| ((a & 0xFF /* 255 */) << 6)
-			| ((b & 0x1FF /* 511 */) << 14)
-			| ((c & 0x1FF /* 511 */) << 23)
-		) | 0);
-	}
-	
-
-	/**
-	 * used for anything that needs to exceed `makeInstruction`'s 256 cap
-	 * 
-	 * @param op    Op code (6 bits; 0..63)
-	 * @param a     usually a register index (8 bits; 0..255)
-	 * @param big   unsigned int (18 bits; 0..262143)
-	 * 
-	 * @return 32-bit instruction int [straight faced emoji] lol
-	 */
-	@:pure inline static function makeInstructionBig(op:Op, a:Int, big:Int):Int {
-		return ((
-			(op & 0x3F /* 63 */)
-			| ((a & 0xFF /* 255 */) << 6)
-			| ((big & 0x3FFFF /* 262143 */) << 14)
-		) | 0);
-	}
-
-	/**
-	 * uh jumping an instruction..? (im so buns at explaining, sorry)
-	 * 
-	 * @param distance  jump distance
-	 * @return          32-bit instruction int [straight faced emoji] lol
-	 */
-	inline static function makeJump(distance:Int):Int {
-		// jump distance, as previously stated, basically just ensures
-		// we're able to negatively jump backwards, while still allowing us
-		// to pack the distance into the instruction int.
-		return makeInstructionBig(Op.JUMP, 0, distance + JUMP_OFFSET);
-	}
-
-	/**
-	 * uh jumping an instruction based on whether the conditional has been met or not..? (im so buns at explaining, sorry)
-	 * 
-	 * @param op        the conditional jump operation (jump if false / true)
-	 * @param register  the register that contains the condition value
-	 * @param distance  jump distance
-	 * @return          32-bit instruction int [straight faced emoji] lol
-	 */
-	inline static function makeConditionalJump(op:ConditionalJumpOp, register:Int, distance:Int):Int {
-		return makeInstructionBig(op, register, distance + JUMP_OFFSET);
-	}
-	
-	// for constant or register operations (e.g. ADD)
-	// 0..255 is a register slot
-	// 256..511(largest num that can fit within 9 bits)
-	inline static var FIRST_CONST_OPERAND = 256;
-
-	/**
-	 * Get a constant from constants array (duh)
-	 * 
-	 * @param index right
-	 */
-	@:pure inline static function constant(index:Int):Int {
-		return FIRST_CONST_OPERAND + index;
-	}
-
-	// -- decoding :3
-
-	@:pure inline static function opcodeOf(instruction:Int):Op {
-		return (instruction & 0x3F);
-	}
-
-	@:pure inline static function argumentA(instruction:Int):Int {
-		return (instruction >>> 6) & 0xFF;
-	}
-
-	@:pure inline static function argumentB(instruction:Int):Int {
-		return (instruction >>> 14) & 0x1FF;
-	}
-
-	@:pure inline static function argumentC(instruction:Int):Int {
-		return (instruction >>> 23) & 0x1FF;
-	}
-
-	@:pure inline static function argumentBig(instruction:Int):Int {
-		return (instruction >>> 14) & 0x3FFFF;
-	}
-
-	inline static function argumentJump(instruction:Int) {
-		return argumentBig(instruction) - JUMP_OFFSET;
-	}
-}
-
-enum abstract ValueKind(Int) from Int to Int {
-	var KIND_NULL = 0x00;
-	var KIND_BOOL;
-	var KIND_INT;
-	var KIND_FLOAT;
-	var KIND_OBJ; // anything that isn't a float, bool or int
-}
+import regscript.utils.Error;
+import regscript.types.Instruction;
 
 typedef NativeFunction = Array<Dynamic> -> Dynamic;
-
-@:publicFields
-final class FunctionProto {
-	var instructions:Vector<Int>;
-	var constants:Array<Dynamic>;
-	var registersNeeded:Int;
-
-	/** How many arguments this proto declares **/
-	var arity:Int; // think smart
-
-	var name:String;
-	var constantsStart:Int = -1;
-
-	#if hscriptPos
-	var cols:Array<Int>;
-	var lines:Array<Int>;
-	#end
-
-	var upvalueDecs:Array<UpvalueDesc>;
-
-	function new(
-		instructions:Vector<Int>, constants:Array<Dynamic>,
-		arity:Int, registersNeeded:Int, name:String = "<fn>",
-		lines:Array<Int>, cols:Array<Int>,
-		?uDescs:Array<UpvalueDesc>
-	) {
-		this.instructions = instructions;
-		this.constants = constants;
-		this.registersNeeded = registersNeeded;
-		this.name = name;
-		this.arity = arity;
-		this.upvalueDecs = uDescs ?? [];
-
-		#if hscriptPos
-		this.lines = lines ?? [];
-		this.cols = cols ?? [];
-		#end
-	}
-}
 
 // based on luas register vm
 
 //@:nullSafety(Strict) todo
 class VM {
 	// make a cls file for this???
-	inline static final MAX_CONSTS = 1 << 12;
-	inline static final MAX_GLOBALS = 1 << 9;
+    // should every instance be able to modify there own versions of these?
+    
+	inline static final MAX_CONSTS = 1 << 15;
+	inline static final MAX_GLOBALS = 1 << 11;
 	inline static final NUM_REGISTERS = 1 << 16;
 
 	inline static final REGISTERS_START:Int = MAX_CONSTS + MAX_GLOBALS;
@@ -307,7 +43,6 @@ class VM {
 	var nextConstantSlot = 0;
 	var nextGlobalSlot = MAX_CONSTS;
 
-	var current:FunctionProto;
 	var currentClosure:Closure;
 
 	var openUpvalues:Array<Upvalue> = [];
@@ -324,10 +59,6 @@ class VM {
 	var savedResultSlot:Vector<Int>;
 	var savedClosure:Vector<Closure>;
 
-	// static macro function coolThing_NamePlease(name:<Expr>, type:Array<Type>) {
-	// 	return 
-	// }
-
 	public function new(?globals:Map<String, Dynamic>) {
 		this.savedFirstRegister = new Vector<Int>(MAX_CALL_DEPTH);
 		this.savedPc = new Vector<Int>(MAX_CALL_DEPTH);
@@ -335,7 +66,7 @@ class VM {
 		this.savedClosure = new Vector<Closure>(MAX_CALL_DEPTH);
 
 		// load da globals
-		if(globals != null) for (n => v in globals) this.setGlobal(n, v);
+		if(globals != null) for (n => v in globals) this._setGlobal(n, v);
 	}
 
 	/** Read a slot (duh) **/
@@ -352,7 +83,7 @@ class VM {
 	inline function writeSlot(slot:Int, val:Dynamic):Void {
 		switch Type.typeof(val) {
 			case TNull:
-				__nullifySlot(slot);
+				_nullSlot(slot);
 			case TInt:
 				kinds[slot] = KIND_INT;
 				ints[slot] = (val : Int);
@@ -384,16 +115,8 @@ class VM {
 		}
 	}
 
-	public function setGlobal(name:String, val:Dynamic):Void {
-		this.writeSlot(this.__findOrCreateGlobal(name), val);
-		if (val is FunctionProto) this.loadConstants((cast val : FunctionProto));
-	}
-
-	public function getGlobal(name:String):Dynamic {
-		return this.readSlot(this.__findGlobalSlot(name));
-	}
-
-	@:noCompletion function __findOrCreateGlobal(name:String):Int {
+	/** can't find? create the slot then lol **/
+	@:noCompletion inline function _findFallbackSlot(name:String):Int {
 		var slot = this.globals.get(name);
 		if(slot == null) {
 			if(this.nextGlobalSlot >= REGISTERS_START) this.error("Too many globals");
@@ -403,7 +126,8 @@ class VM {
 		return slot;
 	}
 
-	@:noCompletion function __findGlobalSlot(name:String):Int {
+	/** can't find? throw an error **/
+	@:noCompletion inline function _findSlot(name:String):Int {
 		final slot = this.globals.get(name);
 		if (slot == null) {
 			this.error('Unknown identifier: ${name}');
@@ -411,18 +135,24 @@ class VM {
 		return slot;
 	}
 
+	var loadedProtos:Array<FunctionProto> = [];
 	function loadConstants(fn:FunctionProto):FunctionProto {
 		if (fn.constantsStart >= 0) return fn;
-		if (this.nextConstantSlot + fn.constants.length > MAX_CONSTS) {
-			this.error("Too many constants");
-		}
+		if (this.nextConstantSlot + fn.constants.length > MAX_CONSTS) this.error("Too many constants");
+
 		fn.constantsStart = this.nextConstantSlot;
+		loadedProtos.push(fn);
 		this.nextConstantSlot += fn.constants.length;
-		for (idx in 0...fn.constants.length) {
-			final v:Dynamic = fn.constants[idx];
-			this.writeSlot(fn.constantsStart + idx, v);
-			if (v is FunctionProto) this.loadConstants((cast v : FunctionProto));
+
+		for (i in 0...fn.constants.length) {
+			final v:Dynamic = fn.constants[i];
+			this.writeSlot(fn.constantsStart + i, v);
+			if (v is FunctionProto) {
+				// recurse
+				this.loadConstants((cast v : FunctionProto));
+			}
 		}
+
 		return fn;
 	}
 
@@ -436,15 +166,21 @@ class VM {
 
 	/** Runtime error :3 **/
 	public function error(msg:String) {
-		final fileName = this.current.name; // current closure name
+		if(currentClosure == null) #if hscriptPos
+			throw new Error(msg, "vm", 0,0);
+		#else
+			throw new Error(msg, "vm");
+		#end
+
+		final fileName = this.currentClosure?.proto.name; // current proto name
 		// should we make a filename variable instead?
 		
 		#if hscriptPos
 		// the instruction index
 		final index = this.pc - 1;
 
-		final line = (index >= 0 && index < this.current.lines.length) ? this.current.lines[index] : 0;
-		final col = (index >= 0 && index < this.current.cols.length) ? this.current.cols[index] : 0;
+		final line = (index >= 0 && index < this.currentClosure?.proto.lines.length) ? this.currentClosure?.proto.lines[index] : 0;
+		final col = (index >= 0 && index < this.currentClosure?.proto.cols.length) ? this.currentClosure?.proto.cols[index] : 0;
 
 		throw new Error(msg, fileName, line, col);
 		#else
@@ -453,9 +189,8 @@ class VM {
 	}
 
 	/** Switches the current frame **/
-	function switchFrame(closure:Closure, firstRegister:Int, pc:Int):Void {
+	inline function switchFrame(closure:Closure, firstRegister:Int, pc:Int):Void {
 		final func = closure.proto;
-		this.current = func;
 		this.currentClosure = closure;
 		this.instructions = func.instructions;
 		this.constantsStart = func.constantsStart;
@@ -478,14 +213,28 @@ class VM {
 		if (hasValue) {
 			this.copySlot(slot, registerSlot);
 		} else {
-			this.__nullifySlot(slot);
+			this._nullSlot(slot);
 		}
 		this.switchFrame(this.savedClosure[frame], this.savedFirstRegister[frame], this.savedPc[frame]);
 		this.savedClosure[frame] = null;
 	}
 
+	inline function storeUpvalue(uv:Upvalue, slot:Int):Void {
+		uv.kind = kinds[slot];
+		uv.int = ints[slot];
+		uv.float = floats[slot];
+		uv.obj = objs[slot];
+	}
+
+	inline function loadUpvalue(slot:Int, uv:Upvalue):Void {
+		kinds[slot] = uv.kind;
+		ints[slot] = uv.int;
+		floats[slot] = uv.float;
+		objs[slot] = uv.obj;
+	}
+
 	/**resolve or create an upvalue **/
-	function captureUpval(slot:Int):Upvalue {
+	function captureUpvalue(slot:Int):Upvalue {
 		var i = openUpvalues.length;
 		while (i > 0 && openUpvalues[i - 1].slot > slot) i --;
 		if(i > 0 && openUpvalues[i - 1].slot == slot) return openUpvalues[i -1];
@@ -498,42 +247,18 @@ class VM {
 	/**close all upvalues up until ``slot`**/
 	function closeUpvalues(slot:Int) while (openUpvalues.length > 0) {
 		final uv = openUpvalues[openUpvalues.length-1];
-
 		if(uv.slot < slot) break;
 
-		uv.kind = kinds[uv.slot];
-		uv.int = ints[uv.slot];
-		uv.float = floats[uv.slot];
-		uv.obj = objs[uv.slot];
+		storeUpvalue(uv, uv.slot);
 
 		uv.close();
-
 		openUpvalues.pop();
 	}
 
-	inline function readUpval(slot:Int, uv:Upvalue) {
-		if(uv.open()) {
-			copySlot(slot, uv.slot);
-		} else {
-			kinds[slot] = uv.kind;
-			ints[slot] = uv.int;
-			floats[slot] = uv.float;
-			objs[slot] = uv.obj;
-		}
-	}
+	inline function readUpvalue(slot:Int, uv:Upvalue):Void uv.state == OPEN ? copySlot(slot, uv.slot) : loadUpvalue(slot, uv);
+	inline function writeUpvalue(uv:Upvalue, slot:Int):Void uv.state == OPEN ? copySlot(uv.slot, slot) : storeUpvalue(uv, slot);
 
-	inline function writeUpvalue(uv:Upvalue, slot:Int):Void {
-		if(uv.open()) copySlot(uv.slot, slot)
-		else {
-			uv.kind = kinds[slot];
-			uv.int = ints[slot];
-			uv.float = floats[slot];
-			uv.obj = objs[slot];
-		}
-	}
-
-	@:noCompletion
-	inline function __nullifySlot(slot:Int):Void {
+	inline function _nullSlot(slot:Int):Void {
 		kinds[slot] = KIND_NULL;
 		ints[slot] = 0;
 		floats[slot] = 0.0;
@@ -610,10 +335,86 @@ class VM {
 		this.error('Cannot perform arithmetic on $l and $r');
 	}
 
+	function undoCallClosure(depth:Int, first:Int, oldClosure:Closure, oldFirst:Int, oldPc:Int):Void {
+		this.closeUpvalues(first);
+		while (this.callDepth > depth)
+			this.savedClosure[--this.callDepth] = null;
+
+		if (oldClosure != null) {
+			this.switchFrame(oldClosure, oldFirst, oldPc);
+		} else {
+			this.currentClosure = null;
+		}
+	}
+
+    inline function checkClosureCall(proto:FunctionProto, arity:Int, firstReg:Int):Void {
+        // actually enforcing arity when calling a closure
+        // oh wait, we should impl rest. y'know, the (...args) stuffs
+		if (arity != proto.arity) {
+			this.error('${proto.name} expects ${proto.arity} arg(s), got $arity');
+		}
+
+		if (this.callDepth >= MAX_CALL_DEPTH || firstReg + proto.registersNeeded > TOTAL_SLOTS) {
+			this.error("stack overflow");
+		}
+    }
+
+	var nativeTop = 0;
+	function callClosure(closure:Closure, args:Array<Dynamic>):Dynamic {
+		final proto = closure.proto;
+		this.loadConstants(proto);
+
+		final base = this.currentClosure?.proto != null ? this.nativeTop : REGISTERS_START;
+		final first = base + 1;
+
+        this.checkClosureCall(proto, args.length, first);
+
+        // func = reg x
+        // reg x (x + 1 ... x+b)
+        // b is basically the max argument thing
+		for (i in 0...args.length) this.writeSlot(first + i, args[i]);
+
+		final depth = this.callDepth;
+
+		final oldClosure = this.currentClosure;
+		final oldFirst = this.firstRegister;
+		final oldPc = this.pc;
+		final oldTop = this.nativeTop;
+
+		var res:Dynamic = null;
+
+        try {
+			this.switchFrame(closure, first, 0);
+			res = this.run(depth);
+		} catch (e:Dynamic) {
+			this.nativeTop = oldTop;
+			this.undoCallClosure(depth, first, oldClosure, oldFirst, oldPc);
+			Error.rethrow(e);
+		}
+		
+        this.nativeTop = oldTop;
+		this.undoCallClosure(depth, first, oldClosure, oldFirst, oldPc);
+
+		return res;
+	}
+
+	function callValue(fn:Dynamic, args:Array<Dynamic>):Dynamic { // allow rest args?
+		if(fn is Closure) return this.callClosure(cast fn, args);
+		if(fn is FunctionProto) return this.callClosure(new Closure(cast fn, []), args);
+		if(Reflect.isFunction(fn)) return Reflect.callMethod(null, fn, args);
+
+		this.error("cant call "+fn);
+
+		return null;
+	}
+
 	// scary macro funcs below :3
 	// not 100% on how macro functions work, but i think we can still use this class inside of a macro... 
 	// not too sure on why you'd even want to do such a thing... lol
 
+	// 25.11.2026 - okay what if i combine all these arith macro funcs
+	// into one single function with a few boolean toggles?
+	// exactly how it was before but, y'know, more organized.
 	macro static function arith(expr) return macro {
 		final slotL = slotOfB(instruction);
 		final slotR = slotOfC(instruction);
@@ -670,12 +471,7 @@ class VM {
 		}
 	}
 
-	public function run(main:FunctionProto):Dynamic {
-		this.loadConstants(main);
-		this.callDepth = 0;
-		this.openUpvalues = [];
-		this.switchFrame(new Closure(main, []), REGISTERS_START +1, 0);
-
+	function run(depth:Int):Dynamic {
 		while (true) {
 			final instruction = this.instructions[pc++];
 			final op:Op = Instruction.opcodeOf(instruction);
@@ -691,7 +487,7 @@ class VM {
 					this.copySlot(slotA, this.constantsStart + argBig);
 
 				case LOAD_BOOL: setBool(slotA, Instruction.argumentB(instruction) != 0);
-				case LOAD_NULL: __nullifySlot(slotA);
+				case LOAD_NULL: _nullSlot(slotA);
 
 				case NEW_OBJECT: this.writeSlot(slotA, {});
 				case NEW_CLOSURE:
@@ -701,7 +497,7 @@ class VM {
 
 					for(desc in proto.upvalueDecs) {
 						final slot = firstRegister+desc.parentSlot;
-						upvals.push(desc.fromParent ? captureUpval(slot) : currentClosure.upvalues[desc.parentSlot]);
+						upvals.push(desc.fromParent ? captureUpvalue(slot) : currentClosure.upvalues[desc.parentSlot]);
 					}
 					this.writeSlot(slotA, new Closure(proto, upvals));
 					
@@ -709,20 +505,13 @@ class VM {
 				case JUMP_IF_FALSE: if (!isTruthy(slotA)) this.pc += Instruction.argumentJump(instruction);
 				case JUMP_IF_TRUE: if(isTruthy(slotA)) this.pc += Instruction.argumentJump(instruction);
 
-				case GET_UPVALUE: readUpval(slotA, currentClosure.upvalues[Instruction.argumentB(instruction)]);
+				case GET_UPVALUE: readUpvalue(slotA, currentClosure.upvalues[Instruction.argumentB(instruction)]);
 				case SET_UPVALUE: writeUpvalue(currentClosure.upvalues[Instruction.argumentB(instruction)], slotA);
 				case CLOSE_UPVALUES: closeUpvalues(slotA);
 
 				// global stuff
-				case GET_GLOBAL:
-					final big = Instruction.argumentBig(instruction);
-					final name = objs[constantsStart+big];
-					this.copySlot(slotA, this.__findGlobalSlot(name));
-
-				case SET_GLOBAL:
-					final big = Instruction.argumentBig(instruction);
-					final name = objs[constantsStart+big];
-					this.copySlot(this.__findOrCreateGlobal(name), slotA);
+				case GET_GLOBAL: this.copySlot(slotA, this._findSlot(objs[constantsStart+Instruction.argumentBig(instruction)]));
+				case SET_GLOBAL: this.copySlot(this._findFallbackSlot(objs[constantsStart+Instruction.argumentBig(instruction)]), slotA);
 
 				// arithmetic operations (USING MACROS :DDDDDDD)
 				case ADD: arith(l + r);
@@ -772,20 +561,18 @@ class VM {
 
 					if (closure != null) {
 						final proto:FunctionProto = closure.proto;
-						if (argB != proto.arity) {
-							this.error('${proto.name} expects ${proto.arity} arg(s), got $argB');
-						}
-
-						final calleeFirstArg = (slotA + 1);
-						if (this.callDepth >= MAX_CALL_DEPTH || calleeFirstArg + proto.registersNeeded > TOTAL_SLOTS) {
-							this.error("stack overflow");
-						}
-
+						this.loadConstants(proto);
+                        final firstArgPos = slotA+1;
+                        this.checkClosureCall(proto, argB, firstArgPos);
 						this.pushFrame(slotA);
-						this.switchFrame(closure, calleeFirstArg, 0);
+						this.switchFrame(closure, firstArgPos, 0);
 					} else if (Reflect.isFunction(callee)) {
+						final regTop = this.firstRegister + this.currentClosure?.proto.registersNeeded;
+						final argTop = slotA + argB + 1;
+						this.nativeTop = regTop > argTop ? regTop : argTop;
+
 						final native:NativeFunction = callee;
-						final args:Array<Dynamic> = [for (i in 1...argB + 1) this.readSlot(slotA + i)];
+						final args:Array<Dynamic> = [for (i in 1...argB + 1) this._toHaxe(this.readSlot(slotA + i))];
 						this.writeSlot(slotA, native(args));
 					} else {
 						this.error('Cannot call ${this.readSlot(slotA)}');
@@ -794,7 +581,7 @@ class VM {
 				case RETURN:
 					final hasVal = Instruction.argumentB(instruction) != 0;
 					this.closeUpvalues(this.firstRegister);
-					if(this.callDepth == 0) return hasVal ? this.readSlot(slotA) : null;
+					if(this.callDepth == depth) return hasVal ? this.readSlot(slotA) : null;
 					this.popFrame(hasVal, slotA);
 
 				case _: this.error('unknown opcode ~ $op');
@@ -802,16 +589,69 @@ class VM {
 		}
 	}
 
+	/** converts the given `v` into something YOU (not a vm) can use :3 **/
+	inline function _toHaxe(v:Dynamic):Dynamic {
+		if(v is FunctionProto) v = new Closure(cast v, []);
+		if(v is Closure) {
+			final c:Closure = cast v; // todo: make a proxy class
+			return c.__cacheHostFunc ??= Reflect.makeVarArgs((args:Array<Dynamic>) -> {
+				return this._toHaxe(this.callClosure(c,args));
+			});
+		}
+		return v;
+	}
+
+	inline function _setGlobal(name:String, val:Dynamic):Void {
+		this.writeSlot(this._findFallbackSlot(name), val);
+		if (val is FunctionProto) this.loadConstants((cast val : FunctionProto));
+	}
+
+	inline function _getGlobal(name:String):Dynamic {
+		return this.readSlot(this._findSlot(name));
+	}
+
+	// actual public api thing
+
+	public function execute(main:FunctionProto):Dynamic { // copying hscript cuz (DUH)
+		final main = new Closure(main, []);
+		return this._toHaxe(this.callClosure(main, []));
+	}
+
+	/** call `name` with `?args` **/
+	public function call(name:String, ?args:Array<Dynamic>):Dynamic {
+		return this._toHaxe(this.callValue(this._getGlobal(name), args ?? []));
+	}
+
+	/** set `name` to `val` **/
+	public function set(name:String, val:Dynamic):Void {
+		this._setGlobal(name, val);
+	}
+
+	/** get `name` **/
+	public function get(name:String):Dynamic { // `getGlobal` throws, while this doesn't...
+		final slot = this.globals.get(name);
+		return slot == null ? null : this._toHaxe(this.readSlot(slot));
+	}
+
+	/** returns with `name` exists within the globals table**/
+	public function exists(name:String):Bool {
+		return this.globals.exists(name);
+	}
+
 	/** Reset the vm (duh) **/
 	public function reset() { // todo: test me
-		for (i in 0...nextConstantSlot) __nullifySlot(i);
+		for (i in 0...nextConstantSlot) _nullSlot(i);
 		nextConstantSlot = 0;
 		
-		for (i in MAX_CONSTS...nextGlobalSlot) __nullifySlot(i);
+		for (i in MAX_CONSTS...nextGlobalSlot) _nullSlot(i);
 		globals.clear();
 		nextGlobalSlot = MAX_CONSTS;
 
 		openUpvalues = [];
+		currentClosure = null;
+		for(p in loadedProtos) p.constantsStart = -1;
+		loadedProtos = [];
+		nativeTop = 0;
 		currentClosure = null;
 
 		callDepth = 0;

@@ -1,4 +1,4 @@
-package regscript;
+package regscript.utils;
 
 import haxe.Exception;
 
@@ -27,5 +27,13 @@ final class Error {
 		// pos -> script.hx:5:20: ...
 		// no pos -> script.hx: ...
 		return '$file${#if hscriptPos ":" + line + ":" + col + #end ": " + msg}';
+	}
+
+	public inline static function rethrow(e:Dynamic):Void { // fine here?
+		#if hl
+		hl.Api.rethrow(e);
+		#else
+		throw e;
+		#end
 	}
 }

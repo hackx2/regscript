@@ -1,5 +1,6 @@
 package tests.classes;
 
+import regscript.types.Instruction;
 import haxe.ds.StringMap;
 import haxe.ds.Vector;
 import haxe.PosInfos;
@@ -22,7 +23,7 @@ final class VMTest extends Test {
 	@:ignore function runInstructions(instructions:Array<Op>, constants:Array<Dynamic>, ?globals:StringMap<Dynamic>):Dynamic {
 		instructions = instructions.concat([Instruction.makeInstruction(RETURN, 0, 1)]);
 		final fn = proto(instructions, constants ?? [], 0, 1, "hiii [waves]", []);
-		return new VM(globals).run(fn);
+		return new VM(globals).execute(fn);
 	}
 
 	/**
@@ -42,13 +43,9 @@ final class VMTest extends Test {
 	}
 
 	@:ignore function assertError(expectedMsgPart:String, instructions:Array<Op>, constants:Array<Dynamic>, ?globals:StringMap<Dynamic>, ?pos:PosInfos):Void {
-		instructions = instructions.concat([Instruction.makeInstruction(RETURN, 0, 1)]);
-
-		final fn = new FunctionProto(Vector.fromArrayCopy(instructions), constants, 0, 2, "main", [], []);
-
 		var caught:Dynamic = null;
 		try {
-			new VM(globals).run(fn);
+			runInstructions(instructions, constants, globals);
 		} catch (e:Dynamic) {
 			caught = e;
 		}
@@ -608,5 +605,106 @@ final class VMTest extends Test {
 			Instruction.makeInstructionBig(LOAD_CONST, 0,0),
 			Instruction.makeInstruction(CALL,0,0)
 		], [621]);
+	}
+
+	function testReset() {
+		final vm = new VM();
+
+		final idk = proto([
+			Instruction.makeInstructionBig(LOAD_CONST, 0,0),
+			Instruction.makeInstruction(RETURN,0,1)
+		], [621], 0,1, "idk");
+
+		Assert.equals(621, vm.execute(idk));
+		vm.reset();
+		Assert.equals(621, vm.execute(idk));
+	}
+
+	function testAddToPreSetGlobal() {
+		final vm = new VM();
+		vm.set('val', 22);
+
+		final protogen = proto([
+			Instruction.makeInstructionBig(GET_GLOBAL,0,0),
+			Instruction.makeInstruction(ADD, 0,0,  Instruction.constant(1)),
+			Instruction.makeInstruction(RETURN,0,1)
+		], ["val", 34], 0, 1, "testVarSet");
+
+		Assert.equals(56, vm.execute(protogen));
+	}
+
+	function testSetVar() {
+		final vm = new VM();
+		vm.set('val', 1);
+
+		final protogen = proto([
+			Instruction.makeInstructionBig(LOAD_CONST, 0, 1),
+			Instruction.makeInstructionBig(SET_GLOBAL,0,0),
+			Instruction.makeInstruction(LOAD_NULL,0),
+			Instruction.makeInstructionBig(GET_GLOBAL,0,0),
+			Instruction.makeInstruction(RETURN,0,1)
+		], ["val", 33], 0, 1, "testSetVar");
+
+		Assert.equals(33, vm.execute(protogen));
+	}
+
+	function testSetAnonObj() {
+		final vm = new VM();
+		final obj = {hi: "meow!"};
+		vm.set("obj", obj);
+		final get = vm.get("obj");
+		Assert.equals(obj, get);
+		Assert.equals(obj.hi, get.hi);
+	}
+
+	function testNullVar() {
+		final vm = new VM();
+		Assert.isNull(vm.get("eee"));
+		Assert.isFalse(vm.exists("eee"));
+	}
+
+	function testVarExists() {
+		final vm = new VM();
+		Assert.isFalse(vm.exists("hi"));
+		vm.set("hi", "hii");
+		Assert.isTrue(vm.exists("hi"));
+		Assert.isFalse(vm.exists("_hi"));
+	}
+
+	function testVarExistsFromNewGlobals() {
+		final vm = new VM([":3" => 621]);
+		Assert.isTrue(vm.exists(":3"));
+		Assert.equals(621, vm.get(":3"));
+	}
+
+	function testCallNativeThruPublicApiThing() {
+		final vm = new VM();
+		vm.set("len", Reflect.makeVarArgs((args:Array<Dynamic>) -> (args[0]:String).length));
+		Assert.equals(5, vm.call("len", ["meow!"]));
+	}
+
+	function testGetCallable() {
+		inline function _double() {
+			return proto([
+				Instruction.makeInstruction(MUL, 0, 0, Instruction.constant(0)),
+				Instruction.makeInstruction(RETURN, 0,1)
+			], [2], 1,2, "double");
+		}
+
+		final vm = new VM();
+		vm.set('double', _double());
+
+		final func = vm.get("double");
+		Assert.isTrue(Reflect.isFunction(func));
+		Assert.equals(20, Reflect.callMethod(null, func, [10]));
+	}
+
+	function testResetClearsGlobals() {
+		final vm = new VM();
+		vm.set('val', 22);
+		vm.reset();
+
+		Assert.isFalse(vm.exists("val"));
+		Assert.isNull(vm.get("val"));
 	}
 }
