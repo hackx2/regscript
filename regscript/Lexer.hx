@@ -1,5 +1,6 @@
 package regscript;
 
+import regscript.utils.Error;
 import StringTools.fastCodeAt;
 
 enum abstract TokenType(Int) from Int to Int {

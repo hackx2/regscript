@@ -12,6 +12,7 @@
 - [ ] Type Checker (strictType toggle)
 - [ ] Compiler
   - [ ] `for`, `while`, `break`, `continue`
+  - [ ] enum abstracts
 - [ ] Deadcode Elimination / Optimizer stage
 - [ ] Register VM
   - [ ] Steal unsafe reflect from somewhere
@@ -45,8 +46,8 @@
     - [ ] Throw
     - [ ] New array
     - [X] new obj (anon struct)
-    - [ ] set field
-    - [ ] get field
+    - [x] set field
+    - [x] get field
     - [x] Call
       - [x] Native
       - [x] Bytecode

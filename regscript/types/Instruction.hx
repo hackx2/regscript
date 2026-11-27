@@ -22,6 +22,8 @@ enum abstract Op(Int) from Int to Int {
 	var SET_UPVALUE;	// Upvalue(B) = Reg(A)
 	var GET_GLOBAL;		// Reg(A) = Globals[Const(Big)]
 	var SET_GLOBAL;		// Globals[Const(Big)] = Reg(A)
+	var GET_FIELD; 		// Reg(A) = Reg(B).Const(C)
+	var SET_FIELD;		// Reg(A).Const(B) = Reg(B)
 
 	var JUMP;			// pc += (Reg(B) + Jump Offset)
 	var JUMP_IF_FALSE;	// if(!Reg(A)) pc += (Reg(B) + Jump Offset)
@@ -74,7 +76,7 @@ abstract UpvalueDesc(Int) {
 
 enum abstract UpvalueState(Int) from Int to Int {
 	var OPEN = 0x00;
-	var CLOSED = 0x01;
+	var CLOSED;
 }
 
 @:publicFields

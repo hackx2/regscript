@@ -471,6 +471,24 @@ class VM {
 		}
 	}
 
+	///
+
+	inline function protectRegisters(topAlternative:Int = 0):Void {
+		final reg = this.firstRegister + this.currentClosure.proto.registersNeeded;
+		this.nativeTop = reg > topAlternative ? reg : topAlternative;
+	}
+
+	function getField(obj:Dynamic, field:String):Dynamic {
+		if(obj == null) this.error('Invalid access to field $field');
+		// :bypassAccessor stuff would go here :3
+		return Reflect.getProperty(obj, field);
+	}
+
+	function setField(obj:Dynamic, field:String, value:Dynamic):Void {
+		if(obj==null) this.error('Invalid access to field $field');
+		Reflect.setProperty(obj, field, value);
+	}
+
 	function run(depth:Int):Dynamic {
 		while (true) {
 			final instruction = this.instructions[pc++];
@@ -504,6 +522,19 @@ class VM {
 				case JUMP: this.pc += Instruction.argumentJump(instruction);
 				case JUMP_IF_FALSE: if (!isTruthy(slotA)) this.pc += Instruction.argumentJump(instruction);
 				case JUMP_IF_TRUE: if(isTruthy(slotA)) this.pc += Instruction.argumentJump(instruction);
+
+				case GET_FIELD:
+					final slotB = slotOfB(instruction);
+					final fieldName = objs[slotOfC(instruction)];
+
+					this.protectRegisters();
+					this.writeSlot(slotA, this.getField(this.readSlot(slotB), fieldName));
+				case SET_FIELD:
+					final fieldName = objs[slotOfB(instruction)];
+					final slotC = slotOfC(instruction);
+					
+					this.protectRegisters();
+					this.setField(this.readSlot(slotA), fieldName, this._toHaxe(this.readSlot(slotC)));
 
 				case GET_UPVALUE: readUpvalue(slotA, currentClosure.upvalues[Instruction.argumentB(instruction)]);
 				case SET_UPVALUE: writeUpvalue(currentClosure.upvalues[Instruction.argumentB(instruction)], slotA);

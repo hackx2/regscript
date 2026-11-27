@@ -707,4 +707,94 @@ final class VMTest extends Test {
 		Assert.isFalse(vm.exists("val"));
 		Assert.isNull(vm.get("val"));
 	}
+
+	function testGetField() {
+		final cls = new DummyCls();
+
+		// str
+		assertInstructions("mrraow!", [
+			Instruction.makeInstruction(GET_FIELD, 0, Instruction.constant(0), Instruction.constant(1))
+		], [cls, "str"]);
+
+		// int
+		assertInstructions(621, [
+			Instruction.makeInstruction(GET_FIELD, 0,Instruction.constant(0), Instruction.constant(1))
+		], [cls, "int"]);
+
+		// float
+		assertInstructions(6.21, [
+			Instruction.makeInstruction(GET_FIELD, 0,Instruction.constant(0), Instruction.constant(1))
+		], [cls, "float"]);
+
+		// bool
+		assertInstructions(false, [
+			Instruction.makeInstruction(GET_FIELD, 0,Instruction.constant(0), Instruction.constant(1))
+		], [cls, "bool"]);
+
+		// obj in obj
+		assertInstructions("hewwo!!", [
+			Instruction.makeInstruction(GET_FIELD, 1,Instruction.constant(0), Instruction.constant(1)),
+			Instruction.makeInstruction(GET_FIELD, 0,1, Instruction.constant(2))
+		], [cls, "obj", "hi"]);
+
+		// null var
+		assertInstructions(null, [
+			Instruction.makeInstruction(GET_FIELD, 0,Instruction.constant(0), Instruction.constant(1))
+		], [cls, "nul"]);
+	}
+
+	function testSetField() {
+		final cls = new DummyCls();
+
+		// set str
+		runInstructions([
+			Instruction.makeInstructionBig(LOAD_CONST, 1, 0),
+			Instruction.makeInstruction(SET_FIELD, 1, Instruction.constant(1), Instruction.constant(2))
+		], [cls, "str", "meow..."]);
+		Assert.equals("meow...", cls.str);
+
+		// set int
+		runInstructions([
+			Instruction.makeInstructionBig(LOAD_CONST, 1, 0),
+			Instruction.makeInstruction(SET_FIELD, 1, Instruction.constant(1), Instruction.constant(2))
+		], [cls, "int", 21]);
+		Assert.equals(21, cls.int);
+
+		// set float
+		runInstructions([
+			Instruction.makeInstructionBig(LOAD_CONST, 1, 0),
+			Instruction.makeInstruction(SET_FIELD, 1, Instruction.constant(1), Instruction.constant(2))
+		], [cls, "float", 21.2]);
+		Assert.equals(21.2, cls.float);
+
+		// set float true
+		runInstructions([
+			Instruction.makeInstructionBig(LOAD_CONST, 1, 0),
+			Instruction.makeInstruction(LOAD_BOOL, 2, 1),
+			Instruction.makeInstruction(SET_FIELD, 1, Instruction.constant(1), 2)
+		], [cls, "bool"]);
+		Assert.isTrue(cls.bool);
+
+		// set null
+		runInstructions([
+			Instruction.makeInstructionBig(LOAD_CONST, 1, 0),
+			Instruction.makeInstruction(LOAD_NULL, 2),
+			Instruction.makeInstruction(SET_FIELD, 1, Instruction.constant(1), 2)
+		], [cls, "str"]);
+		Assert.isNull(cls.str);
+	}
+}
+
+// for testin' get/set field op codes
+@:keep class DummyCls {
+	public var str:Null<String> = "mrraow!";
+	public var int:Int = 621;
+	public var float:Float = 6.21;
+	public var bool:Bool = false;
+	public var obj:Dynamic = { hi: "hewwo!!" };
+	public var nul = null;
+
+	function func() {} // todo
+
+	public function new() {}
 }
