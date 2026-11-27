@@ -6,8 +6,6 @@ import haxe.ds.StringMap;
 import regscript.utils.Error;
 import regscript.types.Instruction;
 
-typedef NativeFunction = Array<Dynamic> -> Dynamic;
-
 // based on luas register vm
 
 //@:nullSafety(Strict) todo
@@ -622,9 +620,8 @@ class VM {
 						final argTop = slotA + argB + 1;
 						this.nativeTop = regTop > argTop ? regTop : argTop;
 
-						final native:NativeFunction = callee;
 						final args:Array<Dynamic> = [for (i in 1...argB + 1) this._toHaxe(this.readSlot(slotA + i))];
-						this.writeSlot(slotA, native(args));
+						this.writeSlot(slotA, Reflect.callMethod(null, callee, args));
 					} else {
 						this.error('Cannot call ${this.readSlot(slotA)}');
 					}

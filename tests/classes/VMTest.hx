@@ -345,10 +345,10 @@ final class VMTest extends Test {
 			Instruction.makeInstructionBig(LOAD_CONST, 1, 1),
 			Instruction.makeInstruction(CALL, 0, 1)
 		], [
-			((args:Array<Dynamic>) -> {
+			Reflect.makeVarArgs((args:Array<Dynamic>) -> {
 				trace('hewwo!! ${args.join(",")}');
 				return null;
-			} : NativeFunction),
+			}),
 			"orbl :3"
 		]);
 	}

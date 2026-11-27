@@ -44,7 +44,10 @@
     - [x] Load null
     - [x] call field
     - [ ] Throw
-    - [ ] New array
+    - [ ] arrays
+      - [ ] `NEW_ARRAY`
+      - [ ] `SET_INDEX`
+      - [ ] `GET_INDEX`
     - [X] new obj (anon struct)
     - [x] set field
     - [x] get field
