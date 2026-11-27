@@ -783,6 +783,73 @@ final class VMTest extends Test {
 		], [cls, "str"]);
 		Assert.isNull(cls.str);
 	}
+
+	function testCallFieldFunction() {
+		final cls = new DummyCls();
+
+		assertInstructions("HII", [
+			Instruction.makeInstructionBig(LOAD_CONST, 1, 0),
+			Instruction.makeInstruction(CALL_FIELD, 1, Instruction.constant(1), 0),
+			Instruction.makeInstruction(MOVE, 0, 1)
+		], [cls, "func"]);
+
+		// call func w/ args
+		assertInstructions(5, [
+			Instruction.makeInstructionBig(LOAD_CONST, 1, 0),
+			Instruction.makeInstructionBig(LOAD_CONST, 2, 2),
+			Instruction.makeInstructionBig(LOAD_CONST, 3, 3),
+			Instruction.makeInstruction(CALL_FIELD, 1, Instruction.constant(1), 2),
+			Instruction.makeInstruction(MOVE, 0, 1)
+		], [cls, "add", 2, 3]);
+
+		// call a vm func from a host func 
+		final double = proto([
+			Instruction.makeInstruction(MUL, 0, 0, Instruction.constant(0)),
+			Instruction.makeInstruction(RETURN, 0, 1)
+		], [2], 1, 2, "double");
+
+		assertInstructions(42, [
+			Instruction.makeInstructionBig(LOAD_CONST, 1, 0),
+			Instruction.makeInstructionBig(LOAD_CONST, 2, 2),
+			Instruction.makeInstructionBig(LOAD_CONST, 3, 3),
+			Instruction.makeInstruction(CALL_FIELD, 1, Instruction.constant(1), 2),
+			Instruction.makeInstruction(MOVE, 0, 1)
+		], [cls, "call", double, 21]);
+	}
+
+	function testFieldErrors() {
+		// get on null
+		assertError("Invalid access to field field", [
+			Instruction.makeInstruction(LOAD_NULL, 1),
+			Instruction.makeInstruction(GET_FIELD, 0, 1, Instruction.constant(0))
+		], ["field"]);
+
+		// set on null
+		assertError("Invalid access to field field", [
+			Instruction.makeInstruction(LOAD_NULL, 1),
+			Instruction.makeInstruction(SET_FIELD, 1, Instruction.constant(0), Instruction.constant(1))
+		], ["field", 22]);
+
+		// call on null
+		assertError("Invalid access to field func", [
+			Instruction.makeInstruction(LOAD_NULL, 1),
+			Instruction.makeInstruction(CALL_FIELD, 1, Instruction.constant(0), 0)
+		], ["func"]);
+
+		final cls = new DummyCls();
+
+		// missing func
+		assertError("nope is not a function", [
+			Instruction.makeInstructionBig(LOAD_CONST, 1, 0),
+			Instruction.makeInstruction(CALL_FIELD, 1, Instruction.constant(1), 0)
+		], [cls, "nope"]);
+
+		// field exists but isnt a function
+		assertError("str is not a function", [
+			Instruction.makeInstructionBig(LOAD_CONST, 1, 0),
+			Instruction.makeInstruction(CALL_FIELD, 1, Instruction.constant(1), 0)
+		], [cls, "str"]);
+	}
 }
 
 // for testin' get/set field op codes
@@ -794,7 +861,9 @@ final class VMTest extends Test {
 	public var obj:Dynamic = { hi: "hewwo!!" };
 	public var nul = null;
 
-	function func() {} // todo
+	function func() { return "HII"; } // todo
+	function add(a:Int, b:Int) return a + b;
+	function call(f:Dynamic, v:Dynamic):Dynamic return f(v);
 
 	public function new() {}
 }

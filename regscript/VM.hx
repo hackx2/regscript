@@ -489,6 +489,17 @@ class VM {
 		Reflect.setProperty(obj, field, value);
 	}
 
+	function callField(obj:Dynamic, field:String, args:Array<Dynamic>):Dynamic {
+		if(obj==null) this.error('Invalid access to field $field');
+
+		final prop = Reflect.getProperty(obj, field);
+		final func:Dynamic = this._toHaxe(prop);
+
+		if(!Reflect.isFunction(func)) this.error('$field is not a function');
+
+		return Reflect.callMethod(obj, func, args);
+	}
+
 	function run(depth:Int):Dynamic {
 		while (true) {
 			final instruction = this.instructions[pc++];
@@ -535,6 +546,15 @@ class VM {
 					
 					this.protectRegisters();
 					this.setField(this.readSlot(slotA), fieldName, this._toHaxe(this.readSlot(slotC)));
+				case CALL_FIELD:
+					final fieldName = objs[slotOfB(instruction)];
+					final argC = Instruction.argumentC(instruction);
+
+					this.protectRegisters(slotA + argC + 1);
+
+					final obj = this.readSlot(slotA);
+					final args:Array<Dynamic> = [for(i in 1...argC+1) this._toHaxe(this.readSlot(slotA + i))];
+					this.writeSlot(slotA, this.callField(obj, fieldName, args));
 
 				case GET_UPVALUE: readUpvalue(slotA, currentClosure.upvalues[Instruction.argumentB(instruction)]);
 				case SET_UPVALUE: writeUpvalue(currentClosure.upvalues[Instruction.argumentB(instruction)], slotA);

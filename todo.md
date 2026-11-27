@@ -20,7 +20,7 @@
   - [X] Closures
   - [x] FunctionProto
   - [ ] Interop
-    - [ ] method calls w/ `this` using `CALL_METHOD`
+    - [x] method calls w/ `this` using `CALL_FIELD`
     - [ ] property access using reflect
     - [x] vm.call
     - [x] vm.set
@@ -29,8 +29,8 @@
     - [ ] compiled cls access (base cls e.g. Math, Std, StringTools)
     - [x] wrap haxe funcs in Reflect.makeVarArgs
   - [ ] error callstack (have a look at [concept](./todo%20error.txt))
-  - [ ] Field access
-    - [ ] Anon Structs
+  - [x] Field access
+    - [x] Anon Structs
   - [ ] Imports
     - [ ] Wildcard Imports
   - [ ] Enum
@@ -42,7 +42,7 @@
     - [x] Load const
     - [x] Load bool
     - [x] Load null
-    - [ ] CALL_METHOD
+    - [x] call field
     - [ ] Throw
     - [ ] New array
     - [X] new obj (anon struct)

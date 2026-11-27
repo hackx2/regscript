@@ -22,6 +22,8 @@ enum abstract Op(Int) from Int to Int {
 	var SET_UPVALUE;	// Upvalue(B) = Reg(A)
 	var GET_GLOBAL;		// Reg(A) = Globals[Const(Big)]
 	var SET_GLOBAL;		// Globals[Const(Big)] = Reg(A)
+
+	var CALL_FIELD;		// Reg(A) = Reg(A).Const(B)(Reg(A+1)...Reg(A+C)) | A = field ~ B = field name ~ C arg count
 	var GET_FIELD; 		// Reg(A) = Reg(B).Const(C)
 	var SET_FIELD;		// Reg(A).Const(B) = Reg(B)
 
