@@ -4,6 +4,7 @@ import regscript.Lexer.Token;
 import regscript.Lexer.TokenType;
 import haxe.ds.StringMap;
 
+@:nullSafety(Strict)
 class Preprocessor {
 	public final lexer:Lexer;
 	public final defines:Map<String, String>;
@@ -145,10 +146,10 @@ class Preprocessor {
 	@:noCompletion
 	inline static final TRUE = "1"; // ignore me... please
 
-	function orExpr():String {
+	function orExpr():Null<String> {
 		var left = andExpr();
 
-		while (lexer.token.type == LogicalAnd) {
+		while (lexer.token.type == LogicalOr) {
 			lexer.next();
 
 			final right = andExpr();
@@ -159,7 +160,7 @@ class Preprocessor {
 		return left;
 	}
 
-	function andExpr() {
+	function andExpr():Null<String> {
 		var left = comparisonExpr();
 
 		while (lexer.token.type == LogicalAnd) {
@@ -174,7 +175,7 @@ class Preprocessor {
 	}
 
 	// for stuff like #if (10 >= 20) #end
-	function comparisonExpr() {
+	function comparisonExpr():Null<String> {
 		final left = unary();
 		final type = lexer.token.type;
 
@@ -189,7 +190,7 @@ class Preprocessor {
 	}
 
 	// please.......
-	function comparePlease(type:TokenType, left:String, right:String):Bool {
+	function comparePlease(type:TokenType, left:Null<String>, right:Null<String>):Bool {
 		final l = left == null ? Math.NaN : Std.parseFloat(left);
 		final r = right == null ? Math.NaN : Std.parseFloat(right);
 
@@ -205,21 +206,21 @@ class Preprocessor {
 			}
 		}
 
-		left ??= "";
-		right ?? "";
+		final l = left ?? "";
+		final r = right ?? "";
 
 		return switch type {
-			case Equals: left == right;
-			case NotEquals: left != right;
-			case LessThan: left < right;
-			case GreaterThan: left > right;
-			case LessEquals: left <= right;
-			case GreaterEquals: left >= right;
+			case Equals: l == r;
+			case NotEquals: l != r;
+			case LessThan: l < r;
+			case GreaterThan: l > r;
+			case LessEquals: l <= r;
+			case GreaterEquals: l >= r;
 			default: throw 'how?? (string edition)';
 		}
 	}
 
-	function unary() {
+	function unary():Null<String> {
 		final token = lexer.token;
 		switch token.type {
 			case Not:

@@ -44,6 +44,7 @@ class PreprocessorTest extends Test {
         check("#if debug 1.0 #elseif debug_ null #else 'string' #end", [LNull], ["debug_" => "1"]);
         check("#if debug 1.0 #elseif debug_ 1 #else 'string' #end", [LString]);
         check("#if (1 < 2) 'string' #else 1 #end", [LString]);
+        check("#if (debug || meow) 'string' #else 1 #end", [LString], ["meow" => "1"]);
     }
 
     function testFails() {
